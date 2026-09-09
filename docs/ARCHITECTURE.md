@@ -9,6 +9,7 @@ src/
 │   └── matching/       # Frameworksiz sof matching qoidalari
 ├── application/
 │   ├── matching/       # Matching use-case orchestration
+│   ├── ports/          # Repository, service va state-store kontraktlari
 │   └── requests/       # Intro request lifecycle use-case'lari
 ├── infrastructure/
 │   ├── demo/           # Vaqtinchalik in-memory ma'lumot adapteri
@@ -37,4 +38,8 @@ Dependency ichkariga qaraydi:
 
 ## Hozirgi chegara
 
-Bu Gate 1 local-first prototype. `infrastructure/demo` va browser storage keyinchalik server API adapterlari bilan almashtiriladi. Production schema, endpoint, security va release gate’lar [`PRODUCT_BLUEPRINT.md`](./PRODUCT_BLUEPRINT.md) da belgilangan.
+Bu Gate 1 local-first prototype va Gate 2 server-ready foundation. `infrastructure/demo` va browser storage application portlarini implement qiladi; keyinchalik UI o‘zgarmasdan HTTP adapterlariga almashtiriladi. PostgreSQL migration `db/migrations`, versionlangan API contract `contracts`, delivery holati esa [`GATE_2_CHECKLIST.md`](./GATE_2_CHECKLIST.md) da.
+
+## Server authorization boundary
+
+HTTP handler actorni rotating session’dan oladi, inputni OpenAPI schema bilan tekshiradi va actor ID’ni use-case/repository’ga explicit uzatadi. PostgreSQL transaction boshida `SET LOCAL app.user_id = ...` o‘rnatilib RLS defense-in-depth sifatida ishlaydi. RLS application policy o‘rnini bosmaydi. AI natijasi authorization inputi emas.

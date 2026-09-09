@@ -1,3 +1,5 @@
+import type { StateStore } from '../../application/ports/state-store'
+
 export function loadLocal<T>(key: string, fallback: T): T {
   try {
     const value = localStorage.getItem(key)
@@ -13,4 +15,9 @@ export function saveLocal<T>(key: string, value: T) {
   } catch {
     // The product remains usable when storage is blocked or full.
   }
+}
+
+export const browserStateStore: StateStore = {
+  read: loadLocal,
+  write: saveLocal,
 }

@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "contracts:validate": "node scripts/validate-contracts.mjs",
     "test": "vitest run",
     "lint": "tsc -b --pretty false"
   },

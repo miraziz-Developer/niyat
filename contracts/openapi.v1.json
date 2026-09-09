@@ -1,0 +1,79 @@
+{
+  "openapi": "3.1.0",
+  "info": { "title": "Niyat API", "version": "1.0.0-alpha.1", "description": "Provider-neutral Gate 2 private-alpha contract. AI output never grants authorization." },
+  "servers": [{ "url": "/v1" }],
+  "security": [{ "sessionCookie": [], "csrfToken": [] }],
+  "paths": {
+    "/session": {
+      "get": { "operationId": "getSession", "security": [{ "sessionCookie": [] }], "responses": { "200": { "$ref": "#/components/responses/Session" }, "401": { "$ref": "#/components/responses/Error" } } },
+      "delete": { "operationId": "deleteSession", "responses": { "204": { "description": "Session revoked" }, "401": { "$ref": "#/components/responses/Error" } } }
+    },
+    "/me/profile": {
+      "get": { "operationId": "getMyProfile", "responses": { "200": { "description": "Profile", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Profile" } } } }, "401": { "$ref": "#/components/responses/Error" } } },
+      "patch": { "operationId": "updateMyProfile", "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }], "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ProfileInput" } } } }, "responses": { "200": { "description": "Updated profile", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Profile" } } } }, "400": { "$ref": "#/components/responses/Error" }, "401": { "$ref": "#/components/responses/Error" } } }
+    },
+    "/intents": {
+      "get": { "operationId": "listIntents", "parameters": [{ "$ref": "#/components/parameters/Cursor" }, { "$ref": "#/components/parameters/Limit" }], "responses": { "200": { "description": "Owned intents", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/IntentPage" } } } }, "401": { "$ref": "#/components/responses/Error" } } },
+      "post": { "operationId": "createIntent", "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }], "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/IntentInput" } } } }, "responses": { "201": { "description": "Created intent", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Intent" } } } }, "400": { "$ref": "#/components/responses/Error" }, "409": { "$ref": "#/components/responses/Error" } } }
+    },
+    "/intents/{intentId}": {
+      "parameters": [{ "$ref": "#/components/parameters/IntentId" }],
+      "get": { "operationId": "getIntent", "responses": { "200": { "description": "Intent", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Intent" } } } }, "403": { "$ref": "#/components/responses/Error" }, "404": { "$ref": "#/components/responses/Error" } } },
+      "patch": { "operationId": "updateIntent", "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }], "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/IntentInput" } } } }, "responses": { "200": { "description": "Updated intent", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Intent" } } } }, "403": { "$ref": "#/components/responses/Error" }, "409": { "$ref": "#/components/responses/Error" } } },
+      "delete": { "operationId": "deleteIntent", "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }], "responses": { "204": { "description": "Deleted" }, "403": { "$ref": "#/components/responses/Error" }, "404": { "$ref": "#/components/responses/Error" } } }
+    },
+    "/intents/{intentId}/matches": {
+      "get": { "operationId": "listMatches", "parameters": [{ "$ref": "#/components/parameters/IntentId" }, { "$ref": "#/components/parameters/Cursor" }, { "$ref": "#/components/parameters/Limit" }], "responses": { "200": { "description": "Authorized matches", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MatchPage" } } } }, "403": { "$ref": "#/components/responses/Error" } } }
+    },
+    "/matches/{matchId}/intro-requests": {
+      "post": { "operationId": "createIntroRequest", "parameters": [{ "$ref": "#/components/parameters/MatchId" }, { "$ref": "#/components/parameters/IdempotencyKey" }], "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/IntroRequestInput" } } } }, "responses": { "201": { "description": "Pending request; contact remains hidden", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/IntroRequest" } } } }, "403": { "$ref": "#/components/responses/Error" }, "409": { "$ref": "#/components/responses/Error" }, "429": { "$ref": "#/components/responses/Error" } } }
+    },
+    "/intro-requests": {
+      "get": { "operationId": "listIntroRequests", "parameters": [{ "$ref": "#/components/parameters/Cursor" }, { "$ref": "#/components/parameters/Limit" }], "responses": { "200": { "description": "Participant requests", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/IntroRequestPage" } } } }, "401": { "$ref": "#/components/responses/Error" } } }
+    },
+    "/intro-requests/{requestId}": {
+      "patch": { "operationId": "transitionIntroRequest", "parameters": [{ "$ref": "#/components/parameters/RequestId" }, { "$ref": "#/components/parameters/IdempotencyKey" }], "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "additionalProperties": false, "required": ["status"], "properties": { "status": { "enum": ["accepted", "declined", "cancelled"] } } } } } }, "responses": { "200": { "description": "Transitioned request", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/IntroRequest" } } } }, "403": { "$ref": "#/components/responses/Error" }, "409": { "$ref": "#/components/responses/Error" } } }
+    },
+    "/blocks": {
+      "post": { "operationId": "createBlock", "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }], "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "additionalProperties": false, "required": ["blockedUserId"], "properties": { "blockedUserId": { "$ref": "#/components/schemas/Uuid" }, "reason": { "type": "string", "maxLength": 500 } } } } } }, "responses": { "204": { "description": "Blocked; future interaction is denied" }, "400": { "$ref": "#/components/responses/Error" }, "409": { "$ref": "#/components/responses/Error" } } }
+    },
+    "/reports": {
+      "post": { "operationId": "createReport", "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }], "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ReportInput" } } } }, "responses": { "202": { "description": "Accepted for human review", "content": { "application/json": { "schema": { "type": "object", "required": ["id", "status"], "properties": { "id": { "$ref": "#/components/schemas/Uuid" }, "status": { "const": "open" } } } } } }, "400": { "$ref": "#/components/responses/Error" }, "429": { "$ref": "#/components/responses/Error" } } }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "sessionCookie": { "type": "apiKey", "in": "cookie", "name": "niyat_session", "description": "HttpOnly, Secure, SameSite=Lax rotating opaque session" },
+      "csrfToken": { "type": "apiKey", "in": "header", "name": "X-CSRF-Token" }
+    },
+    "parameters": {
+      "IdempotencyKey": { "name": "Idempotency-Key", "in": "header", "required": true, "schema": { "type": "string", "minLength": 16, "maxLength": 128 } },
+      "Cursor": { "name": "cursor", "in": "query", "schema": { "type": "string", "maxLength": 512 } },
+      "Limit": { "name": "limit", "in": "query", "schema": { "type": "integer", "minimum": 1, "maximum": 100, "default": 20 } },
+      "IntentId": { "name": "intentId", "in": "path", "required": true, "schema": { "$ref": "#/components/schemas/Uuid" } },
+      "MatchId": { "name": "matchId", "in": "path", "required": true, "schema": { "$ref": "#/components/schemas/Uuid" } },
+      "RequestId": { "name": "requestId", "in": "path", "required": true, "schema": { "$ref": "#/components/schemas/Uuid" } }
+    },
+    "responses": {
+      "Error": { "description": "Standard error", "content": { "application/problem+json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+      "Session": { "description": "Current session", "content": { "application/json": { "schema": { "type": "object", "required": ["userId", "expiresAt"], "properties": { "userId": { "$ref": "#/components/schemas/Uuid" }, "expiresAt": { "type": "string", "format": "date-time" } } } } } }
+    },
+    "schemas": {
+      "Uuid": { "type": "string", "format": "uuid" },
+      "Error": { "type": "object", "additionalProperties": false, "required": ["code", "message", "requestId"], "properties": { "code": { "type": "string" }, "message": { "type": "string" }, "field": { "type": "string" }, "requestId": { "type": "string" } } },
+      "PageMeta": { "type": "object", "additionalProperties": false, "required": ["nextCursor"], "properties": { "nextCursor": { "type": ["string", "null"] } } },
+      "ProfileInput": { "type": "object", "additionalProperties": false, "required": ["displayName", "bio", "languages"], "properties": { "displayName": { "type": "string", "minLength": 1, "maxLength": 80 }, "bio": { "type": "string", "maxLength": 1000 }, "languages": { "type": "array", "maxItems": 10, "items": { "type": "string" } } },
+      "Profile": { "allOf": [{ "$ref": "#/components/schemas/ProfileInput" }, { "type": "object", "required": ["userId", "verificationLevel"], "properties": { "userId": { "$ref": "#/components/schemas/Uuid" }, "verificationLevel": { "type": "integer", "minimum": 0, "maximum": 3 } } }] },
+      "IntentInput": { "type": "object", "additionalProperties": false, "required": ["title", "outcome", "offers", "needs", "topics", "mode", "horizon", "visibility", "status"], "properties": { "title": { "type": "string", "minLength": 1, "maxLength": 160 }, "outcome": { "type": "string", "minLength": 1, "maxLength": 2000 }, "offers": { "type": "array", "maxItems": 20, "items": { "type": "string" } }, "needs": { "type": "array", "maxItems": 20, "items": { "type": "string" } }, "topics": { "type": "array", "maxItems": 20, "items": { "type": "string" } }, "mode": { "enum": ["online", "offline", "hybrid"] }, "horizon": { "enum": ["now", "month", "quarter"] }, "visibility": { "enum": ["public", "matched", "private"] }, "status": { "enum": ["draft", "active", "paused", "completed"] } } },
+      "Intent": { "allOf": [{ "$ref": "#/components/schemas/IntentInput" }, { "type": "object", "required": ["id", "ownerId", "createdAt", "updatedAt"], "properties": { "id": { "$ref": "#/components/schemas/Uuid" }, "ownerId": { "$ref": "#/components/schemas/Uuid" }, "createdAt": { "type": "string", "format": "date-time" }, "updatedAt": { "type": "string", "format": "date-time" } } }] },
+      "IntentPage": { "type": "object", "required": ["items", "page"], "properties": { "items": { "type": "array", "items": { "$ref": "#/components/schemas/Intent" } }, "page": { "$ref": "#/components/schemas/PageMeta" } } },
+      "Match": { "type": "object", "additionalProperties": false, "required": ["id", "score", "reasons", "limitations", "leftIntentId", "rightIntentId"], "properties": { "id": { "$ref": "#/components/schemas/Uuid" }, "leftIntentId": { "$ref": "#/components/schemas/Uuid" }, "rightIntentId": { "$ref": "#/components/schemas/Uuid" }, "score": { "type": "number", "minimum": 0, "maximum": 100 }, "reasons": { "type": "array", "items": { "type": "string" } }, "limitations": { "type": "array", "items": { "type": "string" } } } },
+      "MatchPage": { "type": "object", "required": ["items", "page"], "properties": { "items": { "type": "array", "items": { "$ref": "#/components/schemas/Match" } }, "page": { "$ref": "#/components/schemas/PageMeta" } } },
+      "IntroRequestInput": { "type": "object", "additionalProperties": false, "required": ["scope", "message"], "properties": { "scope": { "type": "string", "minLength": 1, "maxLength": 200 }, "message": { "type": "string", "maxLength": 2000 } } },
+      "IntroRequest": { "type": "object", "additionalProperties": false, "required": ["id", "matchId", "senderId", "receiverId", "scope", "message", "status", "expiresAt", "createdAt"], "properties": { "id": { "$ref": "#/components/schemas/Uuid" }, "matchId": { "$ref": "#/components/schemas/Uuid" }, "senderId": { "$ref": "#/components/schemas/Uuid" }, "receiverId": { "$ref": "#/components/schemas/Uuid" }, "scope": { "type": "string" }, "message": { "type": "string" }, "status": { "enum": ["pending", "accepted", "declined", "cancelled", "expired"] }, "expiresAt": { "type": "string", "format": "date-time" }, "createdAt": { "type": "string", "format": "date-time" } } },
+      "IntroRequestPage": { "type": "object", "required": ["items", "page"], "properties": { "items": { "type": "array", "items": { "$ref": "#/components/schemas/IntroRequest" } }, "page": { "$ref": "#/components/schemas/PageMeta" } } },
+      "ReportInput": { "type": "object", "additionalProperties": false, "required": ["subjectType", "subjectId", "reasonCode"], "properties": { "subjectType": { "enum": ["user", "intent", "intro_request"] }, "subjectId": { "$ref": "#/components/schemas/Uuid" }, "reasonCode": { "type": "string", "minLength": 1, "maxLength": 80 }, "details": { "type": "string", "maxLength": 2000 } } }
+    }
+  }
+}
+}

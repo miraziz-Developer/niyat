@@ -4,6 +4,7 @@ import type { Intent, Match } from '../domain/model/entities'
 import { people, starterIntent } from '../infrastructure/demo/demo-data'
 import { usePersistentState } from './shared/use-persistent-state'
 import ProductApp from './workspace/WorkspaceApp'
+import { Dialog } from './shared/Dialog'
 
 type Screen = 'home' | 'create' | 'matches' | 'product'
 type Draft = typeof starterIntent
@@ -136,9 +137,8 @@ function App() {
       )}
 
       {activeMatch && (
-        <div className="modal-wrap" onMouseDown={() => setActiveMatch(null)}>
-          <div className="modal" onMouseDown={(e) => e.stopPropagation()}>
-            <button className="close" onClick={() => setActiveMatch(null)}>×</button>
+        <Dialog label={`${activeMatch.person.name} bilan moslik`} onClose={() => setActiveMatch(null)}>
+            <button aria-label="Dialogni yopish" className="close" onClick={() => setActiveMatch(null)}>×</button>
             <span className="kicker">MUTUAL VALUE · {activeMatch.score}%</span>
             <div className="modal-person"><div className="person-avatar large" style={{ background: activeMatch.person.accent }}>{activeMatch.person.initials}</div><div><h2>{activeMatch.person.name}</h2><p>{activeMatch.person.role} · {activeMatch.person.city}</p></div></div>
             <div className="reason-list">{activeMatch.reasons.map(r => <span key={r}>✓ {r}</span>)}</div>
@@ -149,8 +149,7 @@ function App() {
               <button className="primary full" onClick={() => setRequested([...requested, activeMatch.person.id])}>Rozilik bilan intro so‘rash <span>→</span></button>
             )}
             <small className="consent-note">Bu amal kontaktni darhol ochmaydi. Ikki tomon ham rozilik berishi kerak.</small>
-          </div>
-        </div>
+        </Dialog>
       )}
     </main>
   )

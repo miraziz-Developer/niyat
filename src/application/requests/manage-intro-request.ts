@@ -16,6 +16,7 @@ export function createIntroRequest(personId: string, scope: string, timestamp: n
 
 export function transitionIntroRequest(request: IntroRequest, nextStatus: IntroRequest['status']): IntroRequest {
   if (request.status !== 'pending') throw new Error('Only pending requests can change status')
+  if (nextStatus === 'pending') throw new Error('A request cannot transition back to pending')
   if (request.direction === 'outgoing' && nextStatus === 'accepted') {
     throw new Error('A sender cannot accept their own request')
   }

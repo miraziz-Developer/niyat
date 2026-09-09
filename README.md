@@ -10,6 +10,8 @@ To‘liq mahsulot, arxitektura, xavfsizlik, metrikalar va 0→100 release rejasi
 
 Kod qatlamlari va dependency qoidalari: [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md)
 
+Gate 2 holati va ochiq launch talablari: [`docs/GATE_2_CHECKLIST.md`](./docs/GATE_2_CHECKLIST.md)
+
 ## Ishga tushirish
 
 ```bash
@@ -22,6 +24,7 @@ Tekshiruvlar:
 ```bash
 npm test
 npm run lint
+npm run contracts:validate
 npm run build
 ```
 
@@ -41,6 +44,8 @@ Foydalanuvchi “nima bera olaman / menga nima kerak” formatida niyat yaratadi
 - Circles va progress journey
 - Trust Center va foydalanuvchi ruxsatlari
 - Responsive interfeys va matching unit testlari
+- PostgreSQL Gate 2 migration va versionlangan OpenAPI 3.1 contract
+- Server adapterlari uchun repository/service ports va DB authorization baseline
 
 ## Keyingi validatsiya
 
@@ -51,4 +56,4 @@ Bu hali production ijtimoiy tarmoq emas. Backend qurishdan oldin 30–50 foydala
 3. Ikki tomonlama acceptance
 4. 7 kun ichida yangi niyat bilan qaytish
 
-Signal bo‘lsa: autentifikatsiya, Postgres, embeddings, moderation, notification va keyin MCP integratsiyasi qo‘shiladi. DID/blockchain MVP uchun ataylab qo‘shilmadi.
+Keyingi bosqich: provider tanlash, auth/session va TypeScript API adapterlarini implement qilish, migration’ni real PostgreSQL’da rehearsal qilish, moderation va notification oqimlarini ulash. DID/blockchain MVP uchun ataylab qo‘shilmadi.

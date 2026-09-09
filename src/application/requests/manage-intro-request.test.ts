@@ -26,4 +26,9 @@ describe('intro request lifecycle', () => {
     const declined: IntroRequest = { id: 'r1', personId: 'p1', direction: 'incoming', scope: 'Call', status: 'declined', sentAt: 'Now' }
     expect(() => transitionIntroRequest(declined, 'accepted')).toThrow('pending')
   })
+
+  it('prevents a pending request from transitioning to itself', () => {
+    const incoming: IntroRequest = { id: 'r1', personId: 'p1', direction: 'incoming', scope: 'Call', status: 'pending', sentAt: 'Now' }
+    expect(() => transitionIntroRequest(incoming, 'pending')).toThrow('back to pending')
+  })
 })

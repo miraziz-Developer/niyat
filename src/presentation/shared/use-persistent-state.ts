@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
-import { loadLocal, saveLocal } from '../../infrastructure/persistence/browser-storage'
+import { useStateStore } from './persistence-context'
 
 export function usePersistentState<T>(key: string, fallback: T) {
-  const [value, setValue] = useState<T>(() => loadLocal(key, fallback))
+  const store = useStateStore()
+  const [value, setValue] = useState<T>(() => store.read(key, fallback))
 
-  useEffect(() => saveLocal(key, value), [key, value])
+  useEffect(() => store.write(key, value), [key, store, value])
 
   return [value, setValue] as const
 }
