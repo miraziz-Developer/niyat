@@ -20,7 +20,7 @@ This checklist turns `PRODUCT_BLUEPRINT.md` into verifiable delivery units. `[~]
 - [~] Versioned REST/OpenAPI API — v1 contract exists; TypeScript service implementation open
 - [~] Profile and intent CRUD — API and repository ports exist; adapters open
 - [~] Server-side matches — read contract and repository port exist; job queue/worker open
-- [~] Intro lifecycle — deterministic prototype policy, API contract and DB constraints exist; server transaction open
+- [~] Intro lifecycle — framework-neutral handlers, application policy, PostgreSQL transaction adapter and DB constraints exist; runtime composition/deployment open
 - [~] Block/report — contract, schema and RLS exist; moderation workflow open
 - [ ] Notifications and delivery preferences
 - [ ] Invite-only cohort and 30–50 alpha users
