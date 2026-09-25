@@ -16,7 +16,13 @@ export class OutcomeVerificationApi {
   constructor(private readonly baseUrl = '/v1') {}
 
   async load(): Promise<ServerWorkspace> {
-    this.session = await this.request<Session>('/session')
+    try {
+      this.session = await this.request<Session>('/session')
+    } catch (error) {
+      const devUserId = import.meta.env.VITE_DEV_USER_ID
+      if (!devUserId) throw error
+      this.session = await this.request<Session>('/dev/session', { method: 'POST', headers: { 'X-Dev-User-Id': devUserId } })
+    }
     const [introRequests, collaborations, trustSignals] = await Promise.all([
       this.request<{ items: ServerIntroRequest[] }>('/intro-requests'),
       this.request<{ items: ServerWorkspace['collaborations'] }>('/me/collaborations'),

@@ -1,6 +1,10 @@
 node_modules
 dist
 .DS_Store
+.env
+.env.*
+!.env.example
+.local/
 *.local
 *.tsbuildinfo
 vite.config.js

@@ -17,12 +17,13 @@ This checklist turns `PRODUCT_BLUEPRINT.md` into verifiable delivery units. `[~]
 ## Gate 2 — private alpha
 
 - [~] Auth/session boundary — opaque, revocable PostgreSQL session + CSRF implemented; production identity provider open
-- [~] PostgreSQL — `pg` runtime, migration runner, reversible migrations, constraints and RLS rehearsed on PostgreSQL 17; managed deployment open
+- [~] PostgreSQL — `pg` runtime, migration runner, reversible migrations, constraints, RLS and persistent self-hosted Docker deployment rehearsed on PostgreSQL 17; managed deployment/backup drill open
 - [~] Versioned REST/OpenAPI API — v1 contract and Node HTTP router implemented for intro/outcome slice; remaining resources open
 - [~] Profile and intent CRUD — API and repository ports exist; adapters open
 - [~] Server-side matches — read contract and repository port exist; job queue/worker open
 - [~] Intro lifecycle — handlers, policy, PostgreSQL adapter, read endpoint and runtime composition exist; full browser mutations/deployment open
 - [x] Collaboration/outcome server slice — OpenAPI, reversible PostgreSQL migrations, runtime composition, browser adapter, authorization, durable replay and counterparty-only confirmation verified
+- [x] Single-host private-alpha Docker stack — Nginx frontend, Node API, PostgreSQL, migration/seed jobs and one-command bootstrap
 - [~] Block/report — contract, schema and RLS exist; moderation workflow open
 - [ ] Notifications and delivery preferences
 - [ ] Invite-only cohort and 30–50 alpha users

@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OutcomeVerificationApi } from './outcome-verification-api'
 
-afterEach(() => vi.unstubAllGlobals())
+afterEach(() => {
+  vi.unstubAllGlobals()
+  vi.unstubAllEnvs()
+})
 
 describe('OutcomeVerificationApi', () => {
   it('hydrates session before parallel workspace reads', async () => {
@@ -29,5 +32,20 @@ describe('OutcomeVerificationApi', () => {
     const init = fetch.mock.calls[4][1] as RequestInit
     expect(new Headers(init.headers).get('X-CSRF-Token')).toBe('csrf')
     expect(new Headers(init.headers).get('Idempotency-Key')).toHaveLength(36)
+  })
+
+  it('bootstraps a configured private-alpha session when no session exists', async () => {
+    vi.stubEnv('VITE_DEV_USER_ID', '00000000-0000-4000-8000-000000000001')
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(Response.json({ message: 'Authentication required' }, { status: 401 }))
+      .mockResolvedValueOnce(Response.json({ userId: 'alpha-user', csrfToken: 'csrf', expiresAt: '2999-01-01T00:00:00Z' }, { status: 201 }))
+      .mockResolvedValueOnce(Response.json({ items: [] }))
+      .mockResolvedValueOnce(Response.json({ items: [] }))
+      .mockResolvedValueOnce(Response.json({ items: [] }))
+    vi.stubGlobal('fetch', fetch)
+
+    await expect(new OutcomeVerificationApi().load()).resolves.toMatchObject({ userId: 'alpha-user' })
+    expect(fetch.mock.calls[1][0]).toBe('/v1/dev/session')
+    expect(new Headers((fetch.mock.calls[1][1] as RequestInit).headers).get('X-Dev-User-Id')).toBe('00000000-0000-4000-8000-000000000001')
   })
 })

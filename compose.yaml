@@ -1,0 +1,78 @@
+name: niyat
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-niyat}
+      POSTGRES_USER: ${POSTGRES_USER:-niyat}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-niyat_local_only}
+    ports:
+      - "127.0.0.1:${NIYAT_POSTGRES_PORT:-55432}:5432"
+    volumes:
+      - ./.local/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-niyat} -d ${POSTGRES_DB:-niyat}"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+      start_period: 5s
+    stop_grace_period: 30s
+
+  migrate:
+    image: niyat-api:local
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-niyat}:${POSTGRES_PASSWORD:-niyat_local_only}@postgres:5432/${POSTGRES_DB:-niyat}
+    command: ["npm", "run", "db:migrate"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  seed:
+    image: niyat-api:local
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-niyat}:${POSTGRES_PASSWORD:-niyat_local_only}@postgres:5432/${POSTGRES_DB:-niyat}
+    command: ["npm", "run", "db:seed:private-alpha"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    image: niyat-api:local
+    build:
+      context: .
+      target: api
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-niyat}:${POSTGRES_PASSWORD:-niyat_local_only}@postgres:5432/${POSTGRES_DB:-niyat}
+      DATABASE_POOL_SIZE: ${DATABASE_POOL_SIZE:-10}
+      NODE_ENV: ${NIYAT_NODE_ENV:-development}
+      AUTH_MODE: ${AUTH_MODE:-local}
+      HOST: 0.0.0.0
+      PORT: 3000
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "const s=require('node:net').connect(3000,'127.0.0.1',()=>{s.end();process.exit(0)});s.on('error',()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+  web:
+    build:
+      context: .
+      target: web
+      args:
+        VITE_API_MODE: server
+        VITE_DEV_USER_ID: ${VITE_DEV_USER_ID:-00000000-0000-4000-8000-000000000001}
+    restart: unless-stopped
+    ports:
+      - "${NIYAT_HTTP_PORT:-8080}:80"
+    depends_on:
+      api:
+        condition: service_healthy
