@@ -5,19 +5,29 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:api": "AUTH_MODE=local tsx server/index.ts",
+    "db:migrate": "tsx scripts/migrate.ts",
+    "smoke:api": "node scripts/runtime-smoke.mjs",
     "build": "tsc -b && vite build",
     "contracts:validate": "node scripts/validate-contracts.mjs",
     "test": "vitest run",
-    "lint": "tsc -b --pretty false"
+    "lint": "tsc -b --pretty false && tsc -p tsconfig.server.json --pretty false",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
+    "pg": "^8.23.0",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
+    "@playwright/test": "^1.63.0",
+    "@types/node": "^26.6.2",
+    "@types/pg": "^8.23.1",
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.7",
     "@vitejs/plugin-react": "6.1.1",
+    "tsx": "^4.23.15",
     "typescript": "7.0.2",
     "vite": "8.2.2",
     "vitest": "5.0.0"

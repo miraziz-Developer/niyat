@@ -41,7 +41,7 @@ function dependencies(gateway: IntroRequestGateway, sessions: SessionResolver = 
 describe('intro request HTTP handlers', () => {
   it('uses the authenticated actor and replays the same idempotent create result', async () => {
     const create = vi.fn().mockResolvedValue(intro)
-    const handler = createIntroRequestHandler(dependencies({ create, transition: vi.fn() }))
+    const handler = createIntroRequestHandler(dependencies({ create, transition: vi.fn(), list: vi.fn() }))
 
     const first = await handler(request('POST', { scope: intro.scope, message: intro.message, actorId: 'spoofed' }), matchId)
     expect(first.status).toBe(400)
@@ -62,7 +62,7 @@ describe('intro request HTTP handlers', () => {
 
   it('rejects invalid security headers before invoking the use case', async () => {
     const create = vi.fn()
-    const handler = createIntroRequestHandler(dependencies({ create, transition: vi.fn() }))
+    const handler = createIntroRequestHandler(dependencies({ create, transition: vi.fn(), list: vi.fn() }))
     const response = await handler(request('POST', { scope: 'Call', message: '' }, { 'X-CSRF-Token': 'wrong' }), matchId)
     expect(response.status).toBe(403)
     expect(await response.json()).toMatchObject({ code: 'invalid_csrf_token', requestId: 'test-request-id' })
@@ -71,7 +71,7 @@ describe('intro request HTTP handlers', () => {
 
   it('rejects expired sessions', async () => {
     const create = vi.fn()
-    const handler = createIntroRequestHandler(dependencies({ create, transition: vi.fn() }, resolver({ expiresAt: '2020-01-01T00:00:00.000Z' })))
+    const handler = createIntroRequestHandler(dependencies({ create, transition: vi.fn(), list: vi.fn() }, resolver({ expiresAt: '2020-01-01T00:00:00.000Z' })))
     const response = await handler(request('POST', { scope: 'Call', message: '' }), matchId)
     expect(response.status).toBe(401)
     expect(create).not.toHaveBeenCalled()
@@ -79,7 +79,7 @@ describe('intro request HTTP handlers', () => {
 
   it('maps transition authorization failures to the standard problem response', async () => {
     const transition = vi.fn().mockRejectedValue(new ApplicationError('forbidden', 'Only the receiver may accept or decline'))
-    const handler = transitionIntroRequestHandler(dependencies({ create: vi.fn(), transition }))
+    const handler = transitionIntroRequestHandler(dependencies({ create: vi.fn(), transition, list: vi.fn() }))
     const response = await handler(request('PATCH', { status: 'accepted' }), requestId)
     expect(response.status).toBe(403)
     expect(response.headers.get('content-type')).toContain('application/problem+json')

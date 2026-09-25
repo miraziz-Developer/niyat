@@ -26,7 +26,29 @@ npm test
 npm run lint
 npm run contracts:validate
 npm run build
+npm run test:e2e
 ```
+
+## PostgreSQL API runtime
+
+Node HTTP composition root, `pg` adapteri va migration runner mavjud:
+
+```bash
+export DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/niyat
+npm run db:migrate
+npm run dev:api
+VITE_API_MODE=server npm run dev
+```
+
+`dev:api` faqat local/private-alpha bootstrap (`AUTH_MODE=local`) uchun. Mavjud user bilan session ochish:
+
+```bash
+curl -c cookies.txt -X POST \
+  -H 'X-Dev-User-Id: <existing-user-uuid>' \
+  http://127.0.0.1:3000/v1/dev/session
+```
+
+Production’da `AUTH_MODE=local` qat’iy rad etiladi; OAuth/passkey/magic-link provider session yaratish oqimiga ulanishi shart. API va browser dev serverlari birga ishlaganda Vite `/v1` so‘rovlarini `127.0.0.1:3000` ga proxy qiladi.
 
 ## MVP gipotezasi
 
@@ -41,11 +63,16 @@ Foydalanuvchi “nima bera olaman / menga nima kerak” formatida niyat yaratadi
 - Today dashboard va daily mission
 - Discover, saqlangan matchlar va izohli recommendation
 - Incoming/outgoing request lifecycle
+- Accepted intro → milestone → outcome verification → trust signal core loop
 - Circles va progress journey
 - Trust Center va foydalanuvchi ruxsatlari
 - Responsive interfeys va matching unit testlari
 - PostgreSQL Gate 2 migration va versionlangan OpenAPI 3.1 contract
 - Server adapterlari uchun repository/service ports va DB authorization baseline
+- Collaboration/outcome uchun OpenAPI endpointlari, PostgreSQL persistence, transaction gateway va authenticated HTTP handlerlar
+- Node HTTP router/composition root, `pg` pool, DB migration runner, rotating opaque session va PostgreSQL idempotency store
+- Server read-model hydration va outcome mutationlariga ulangan opt-in browser adapter (`VITE_API_MODE=server`)
+- Chromium responsive E2E va axe accessibility smoke testlari
 
 ## Keyingi validatsiya
 
@@ -56,4 +83,6 @@ Bu hali production ijtimoiy tarmoq emas. Backend qurishdan oldin 30–50 foydala
 3. Ikki tomonlama acceptance
 4. 7 kun ichida yangi niyat bilan qaytish
 
-Keyingi bosqich: provider tanlash, auth/session va TypeScript API adapterlarini implement qilish, migration’ni real PostgreSQL’da rehearsal qilish, moderation va notification oqimlarini ulash. DID/blockchain MVP uchun ataylab qo‘shilmadi.
+Default UI local-first demo bo‘lib qoladi. `VITE_API_MODE=server` rejimida intro read-model, collaboration, milestone, verification va trust signal oqimi serverdan hydrate qilinadi; requester o‘z natijasini tasdiqlay olmaydi. Local demo’dagi counterparty tugmasi faqat prototip simulyatsiyasidir.
+
+Keyingi bosqich: production auth provider, profile/intent/match UI adapterlari, notification/moderation delivery, analytics va deployment observability. PostgreSQL idempotency restartdan keyingi replayni saqlaydi; mutatsiya commit’i bilan idempotency record yozuvi orasidagi crash window’ni to‘liq yopish uchun keyinchalik bitta transaction/UoW kerak. DID/blockchain MVP uchun ataylab qo‘shilmadi.

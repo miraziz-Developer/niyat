@@ -62,6 +62,15 @@ export class PostgresIntroRequestGateway implements IntroRequestGateway {
     })
   }
 
+  list(actorId: string): Promise<ServerIntroRequest[]> {
+    return this.withActor(actorId, async transaction => {
+      const result = await transaction.query<IntroRow>(`
+        SELECT id, match_id, sender_id, receiver_id, scope, message, status, expires_at, created_at
+        FROM intro_requests WHERE sender_id = $1 OR receiver_id = $1 ORDER BY created_at DESC`, [actorId])
+      return result.rows.map(row => mapIntro(row))
+    })
+  }
+
   private withActor<T>(actorId: string, work: (transaction: SqlExecutor) => Promise<T>): Promise<T> {
     return this.database.transaction(async transaction => {
       await transaction.query(`SELECT set_config('app.user_id', $1, true)`, [actorId])

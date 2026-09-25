@@ -9,12 +9,15 @@ src/
 │   └── matching/       # Frameworksiz sof matching qoidalari
 ├── application/
 │   ├── matching/       # Matching use-case orchestration
+│   ├── collaborations/ # Accepted intro va milestone lifecycle
+│   ├── outcomes/       # Verification va trust-signal invariantlari
 │   ├── ports/          # Repository, service va state-store kontraktlari
 │   └── requests/       # Intro request lifecycle use-case'lari
 ├── infrastructure/
 │   ├── demo/           # Vaqtinchalik in-memory ma'lumot adapteri
 │   ├── persistence/    # Browser storage adapteri
-│   └── server/         # Framework/provider-neutral HTTP, session va SQL adapter chegaralari
+│   ├── http/           # Browser API adapteri
+│   └── server/         # Node HTTP, session, idempotency va PostgreSQL adapterlari
 └── presentation/
     ├── shared/         # Reusable React hook'lar
     ├── workspace/      # Workspace UI va uning komponentlari
@@ -39,10 +42,10 @@ Dependency ichkariga qaraydi:
 
 ## Hozirgi chegara
 
-Bu Gate 1 local-first prototype va Gate 2 server-ready foundation. `infrastructure/demo` va browser storage application portlarini implement qiladi; keyinchalik UI o‘zgarmasdan HTTP adapterlariga almashtiriladi. PostgreSQL migration `db/migrations`, versionlangan API contract `contracts`, delivery holati esa [`GATE_2_CHECKLIST.md`](./GATE_2_CHECKLIST.md) da.
+Bu Gate 1 local-first prototype va Gate 2 runnable server vertical slice. Default rejim `infrastructure/demo` va browser storage’dan foydalanadi. `VITE_API_MODE=server` intro/collaboration/outcome read-modelini serverdan hydrate qiladi va outcome mutationlarini authenticated API orqali bajaradi. Profile, intent, matching va notification UI oqimlari hali server adapteriga ko‘chirilmagan. PostgreSQL migration `db/migrations`, versionlangan API contract `contracts`, delivery holati esa [`GATE_2_CHECKLIST.md`](./GATE_2_CHECKLIST.md) da.
 
 ## Server authorization boundary
 
-HTTP handler actorni rotating session’dan oladi, inputni OpenAPI schema bilan tekshiradi va actor ID’ni use-case/repository’ga explicit uzatadi. PostgreSQL transaction boshida `SET LOCAL app.user_id = ...` o‘rnatilib RLS defense-in-depth sifatida ishlaydi. RLS application policy o‘rnini bosmaydi. AI natijasi authorization inputi emas.
+HTTP handler actorni server session’dan oladi, inputni OpenAPI schema bilan tekshiradi va actor ID’ni use-case/repository’ga explicit uzatadi. PostgreSQL transaction boshida `SET LOCAL app.user_id = ...` o‘rnatilib RLS defense-in-depth sifatida ishlaydi. RLS application policy o‘rnini bosmaydi. AI natijasi authorization inputi emas.
 
-Intro request vertical slice Web `Request`/`Response`, `SessionResolver`, `IdempotencyStore` va `SqlDatabase` portlariga tayanadi; HTTP framework, auth provider va PostgreSQL driver composition root’da tanlanadi. `MemoryIdempotencyStore` faqat single-instance alpha/development uchun: multi-instance deployment oldidan durable PostgreSQL yoki Redis adapteri bilan almashtiriladi. Database runtime role internetdan bevosita ochilmaydi va faqat zarur schema/table/function grantlarini oladi.
+Intro request va collaboration/outcome vertical slice’lari Web `Request`/`Response`, `SessionResolver`, `IdempotencyStore` va `SqlDatabase` portlariga tayanadi. `server/index.ts` Node HTTP, `pg`, PostgreSQL session va durable idempotency adapterlarini composition qiladi. Outcome gateway accepted intro → milestones → evidence → counterparty-only decision → deduplicated trust signal zanjirini bajaradi. Local bootstrap session faqat non-production `AUTH_MODE=local`da ochiladi; production tashqi identity provider talab qiladi. Idempotency record restartdan keyin replay qilinadi, ammo business transaction va response record orasidagi process-crash window atomik Unit of Work qo‘shilmaguncha qoladi. Database runtime role internetdan bevosita ochilmaydi va faqat zarur grantlarni olishi kerak.

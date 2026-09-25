@@ -9,18 +9,20 @@ This checklist turns `PRODUCT_BLUEPRINT.md` into verifiable delivery units. `[~]
 - [x] Responsive UI and native keyboard-operable controls
 - [x] Dialog Escape close, focus trap and trigger focus restoration
 - [x] Deterministic local demo and domain/application unit tests
+- [x] Browser-persisted accepted intro → milestones → verified outcome → trust signal prototype
 - [x] Empty states for user-owned collections
-- [~] Loading, recoverable error and offline indicators — UI boundary remains after API adapter exists
-- [ ] Automated browser accessibility audit and screen-reader review
+- [x] Server loading/connected/recoverable session-error indicators
+- [~] Automated Chromium axe audit exists; manual screen-reader review remains
 
 ## Gate 2 — private alpha
 
-- [~] Auth/session boundary — cookie + CSRF contract exists; provider and implementation open
-- [~] PostgreSQL — reversible initial migration, constraints, indexes and initial RLS exist; deployed DB open
-- [~] Versioned REST/OpenAPI API — v1 contract exists; TypeScript service implementation open
+- [~] Auth/session boundary — opaque, revocable PostgreSQL session + CSRF implemented; production identity provider open
+- [~] PostgreSQL — `pg` runtime, migration runner, reversible migrations, constraints and RLS rehearsed on PostgreSQL 17; managed deployment open
+- [~] Versioned REST/OpenAPI API — v1 contract and Node HTTP router implemented for intro/outcome slice; remaining resources open
 - [~] Profile and intent CRUD — API and repository ports exist; adapters open
 - [~] Server-side matches — read contract and repository port exist; job queue/worker open
-- [~] Intro lifecycle — framework-neutral handlers, application policy, PostgreSQL transaction adapter and DB constraints exist; runtime composition/deployment open
+- [~] Intro lifecycle — handlers, policy, PostgreSQL adapter, read endpoint and runtime composition exist; full browser mutations/deployment open
+- [x] Collaboration/outcome server slice — OpenAPI, reversible PostgreSQL migrations, runtime composition, browser adapter, authorization, durable replay and counterparty-only confirmation verified
 - [~] Block/report — contract, schema and RLS exist; moderation workflow open
 - [ ] Notifications and delivery preferences
 - [ ] Invite-only cohort and 30–50 alpha users
@@ -34,6 +36,7 @@ This checklist turns `PRODUCT_BLUEPRINT.md` into verifiable delivery units. `[~]
 - Match visibility requires ownership of one participating intent and no block edge.
 - Intro creation requires an eligible reciprocal match; contacts remain private while pending.
 - Only the receiver accepts/declines; only the sender cancels; terminal requests never reopen.
+- Outcome verification requires completed milestones; only a distinct counterparty may confirm in the future server slice, and disputed outcomes emit no trust signal.
 - Block takes effect before future discovery, intro or messaging checks.
 - Reports enter human review; reporters cannot read moderator-only notes.
 - Audit events are append-only and must not contain raw message bodies or exact location.

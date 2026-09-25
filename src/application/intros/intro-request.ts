@@ -28,6 +28,7 @@ export type TransitionIntroRequestCommand = {
 export interface IntroRequestGateway {
   create(command: CreateIntroRequestCommand): Promise<ServerIntroRequest>
   transition(command: TransitionIntroRequestCommand): Promise<ServerIntroRequest>
+  list(actorId: string): Promise<ServerIntroRequest[]>
 }
 
 export class ApplicationError extends Error {
@@ -63,4 +64,6 @@ export class ManageIntroRequests {
   transition(command: TransitionIntroRequestCommand) {
     return this.gateway.transition(command)
   }
+
+  list(actorId: string) { return this.gateway.list(actorId) }
 }

@@ -50,3 +50,39 @@ export type Circle = {
   progress: number
   tags: string[]
 }
+
+export type Milestone = {
+  id: string
+  title: string
+  status: 'pending' | 'completed'
+  completedAt?: string
+}
+
+export type Collaboration = {
+  id: string
+  introRequestId: string
+  personId: string
+  title: string
+  status: 'active' | 'outcome-ready' | 'verification-pending' | 'verified'
+  startedAt: string
+  milestones: Milestone[]
+}
+
+export type OutcomeVerification = {
+  id: string
+  collaborationId: string
+  personId: string
+  evidence: string
+  status: 'pending' | 'confirmed' | 'disputed'
+  requestedAt: string
+  resolvedAt?: string
+}
+
+export type TrustSignal = {
+  id: string
+  collaborationId: string
+  verificationId: string
+  personId: string
+  label: string
+  issuedAt: string
+}

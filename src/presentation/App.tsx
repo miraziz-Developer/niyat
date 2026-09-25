@@ -1,13 +1,14 @@
 import { useMemo, useState } from 'react'
 import { rankMatches } from '../application/matching/rank-matches'
 import type { Intent, Match } from '../domain/model/entities'
-import { people, starterIntent } from '../infrastructure/demo/demo-data'
+import type { AppData, IntentDraft } from './app.types'
+import { Dialog } from './shared/Dialog'
+import { MutualExchange, PersonSummary } from './shared/MatchSummary'
+import { storageKeys } from './shared/storage-keys'
 import { usePersistentState } from './shared/use-persistent-state'
 import ProductApp from './workspace/WorkspaceApp'
-import { Dialog } from './shared/Dialog'
 
 type Screen = 'home' | 'create' | 'matches' | 'product'
-type Draft = typeof starterIntent
 
 function parseTags(value: string) {
   return value.split(',').map((item) => item.trim()).filter(Boolean).slice(0, 8)
@@ -29,9 +30,10 @@ function Mark() {
   return <div className="mark" aria-label="Niyat"><i /><i /><i /></div>
 }
 
-function App() {
+function App({ data }: { data: AppData }) {
+  const { starterIntent, people, circles, initialRequests } = data
   const [screen, setScreen] = useState<Screen>('home')
-  const [draft, setDraft] = usePersistentState<Draft>('niyat-draft', starterIntent)
+  const [draft, setDraft] = usePersistentState<IntentDraft>(storageKeys.intentDraft, starterIntent)
   const [activeMatch, setActiveMatch] = useState<Match | null>(null)
   const [requested, setRequested] = useState<string[]>([])
 
@@ -41,7 +43,7 @@ function App() {
   const matches = useMemo(() => rankMatches(intent, people), [intent])
   const completeness = [draft.title, draft.outcome, draft.offers.length, draft.needs.length, draft.topics.length].filter(Boolean).length * 20
 
-  function update<K extends keyof Draft>(key: K, value: Draft[K]) {
+  function update<K extends keyof IntentDraft>(key: K, value: IntentDraft[K]) {
     setDraft((current) => ({ ...current, [key]: value }))
   }
 
@@ -50,7 +52,16 @@ function App() {
     setScreen('product')
   }
 
-  if (screen === 'product') return <ProductApp intent={intent} onEdit={() => setScreen('create')} onExit={() => setScreen('home')} />
+  if (screen === 'product') {
+    return (
+      <ProductApp
+        intent={intent}
+        data={{ people, circles, initialRequests }}
+        onEdit={() => setScreen('create')}
+        onExit={() => setScreen('home')}
+      />
+    )
+  }
 
   return (
     <main>
@@ -122,13 +133,9 @@ function App() {
             {matches.map((match, index) => (
               <button className="match-card" key={match.person.id} onClick={() => setActiveMatch(match)}>
                 <div className="match-top"><span className="rank">0{index + 1}</span><div className="score"><b>{match.score}</b><small>MATCH</small></div></div>
-                <div className="person"><div className="person-avatar" style={{ background: match.person.accent }}>{match.person.initials}</div><div><h3>{match.person.name}</h3><p>{match.person.role} · {match.person.city}</p></div></div>
+                <PersonSummary person={match.person} />
                 <h4>{match.person.intent.title}</h4>
-                <div className="exchange">
-                  <div><span>SEN OLASAN</span><p>{match.youReceive.join(' · ') || 'Yangi perspektiva'}</p></div>
-                  <b>⇄</b>
-                  <div><span>ULAR OLADI</span><p>{match.theyReceive.join(' · ') || 'Yangi aloqa'}</p></div>
-                </div>
+                <MutualExchange match={match} />
                 <span className="view">Kesishmani ochish ↗</span>
               </button>
             ))}
@@ -140,7 +147,7 @@ function App() {
         <Dialog label={`${activeMatch.person.name} bilan moslik`} onClose={() => setActiveMatch(null)}>
             <button aria-label="Dialogni yopish" className="close" onClick={() => setActiveMatch(null)}>×</button>
             <span className="kicker">MUTUAL VALUE · {activeMatch.score}%</span>
-            <div className="modal-person"><div className="person-avatar large" style={{ background: activeMatch.person.accent }}>{activeMatch.person.initials}</div><div><h2>{activeMatch.person.name}</h2><p>{activeMatch.person.role} · {activeMatch.person.city}</p></div></div>
+            <PersonSummary person={activeMatch.person} large />
             <div className="reason-list">{activeMatch.reasons.map(r => <span key={r}>✓ {r}</span>)}</div>
             <div className="message"><span>TAKLIF ETILGAN KIRISH</span><p>{activeMatch.opening}</p></div>
             {requested.includes(activeMatch.person.id) ? (
