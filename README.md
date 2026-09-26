@@ -130,6 +130,8 @@ Foydalanuvchi “nima bera olaman / menga nima kerak” formatida niyat yaratadi
 - Block (kutilayotgan intro’larni yopadi va juftlikni yashiradi) va audit qilinadigan, kunlik limitli shikoyat navbati
 - Idempotency record biznes o‘zgarishi bilan bitta tranzaksiyada commit qilinadi
 - Chromium responsive E2E, server-mode brauzer oqimi va axe accessibility testlari
+- Token asosidagi dizayn tizimi: o‘qiladigan shrift shkalasi (min 11–12px), ko‘rinadigan klaviatura fokusi, 44px teginish maydonlari, WCAG AA kontrast, `prefers-reduced-motion`
+- UX: chip ko‘rinishidagi teg kiritish, format/muddat tanlovi, e’lon qilishdan oldin nima qolganini ko‘rsatuvchi ro‘yxat, tahrirlanadigan intro xabari, bloklash/chiqish tasdig‘i, yuklanish skeletlari va o‘zbekcha xato xabarlari
 
 ## Keyingi validatsiya
 

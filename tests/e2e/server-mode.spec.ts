@@ -39,7 +39,7 @@ async function expectAccessible(page: Page) {
 async function openWorkspace(page: Page) {
   await page.goto(app!)
   await page.getByRole('button', { name: 'Workspace’ni ochish' }).click()
-  await expect(page.getByText('● SERVERGA ULANGAN')).toBeVisible()
+  await expect(page.getByText('Serverga ulangan · o‘zgarishlar saqlanadi')).toBeVisible()
 }
 
 test('new member onboards, matches anonymously, and completes a counterparty-verified outcome', async ({ page, browser }) => {

@@ -3,8 +3,11 @@ import type { IntentInput, ServerIntent } from '../application/intents/intent'
 import type { ServerProfile } from '../application/profiles/profile'
 import type { Intent } from '../domain/model/entities'
 import type { AppData, IntentDraft, Viewer } from './app.types'
+import { describeError } from './shared/describe-error'
 import { useNetwork } from './shared/network-context'
+import { Segmented } from './shared/Segmented'
 import { storageKeys } from './shared/storage-keys'
+import { TagInput } from './shared/TagInput'
 import { usePersistentState } from './shared/use-persistent-state'
 import ProductApp from './workspace/WorkspaceApp'
 
@@ -14,28 +17,29 @@ type ServerState =
   | { status: 'loading' }
   | { status: 'error'; message: string }
   | { status: 'ready'; userId: string; profile: ServerProfile | null; intent: ServerIntent | null }
+type Visibility = Extract<IntentInput['visibility'], 'matched' | 'public'>
 
 const demoViewer: Viewer = { name: 'Miraziz', subtitle: 'Builder · demo', verified: true }
 const editableStatuses: ServerIntent['status'][] = ['draft', 'active', 'paused']
+const emptyDraft: IntentDraft = { title: '', outcome: '', offers: [], needs: [], topics: [], mode: 'hybrid', horizon: 'quarter' }
+const modeLabels = { online: 'Onlayn', offline: 'Oflayn', hybrid: 'Aralash' } as const
+const horizonLabels = { now: 'Hozir', month: '1 oy', quarter: '3 oy' } as const
 
-function parseTags(value: string) {
-  return value.split(',').map((item) => item.trim()).filter(Boolean).slice(0, 8)
-}
-
-function Field({ label, hint, value, onChange, placeholder, area = false }: {
-  label: string; hint: string; value: string; onChange: (value: string) => void; placeholder: string; area?: boolean
+function Field({ label, hint, value, onChange, placeholder, area = false, maxLength, autoFocus = false }: {
+  label: string; hint: string; value: string; onChange: (value: string) => void; placeholder: string; area?: boolean; maxLength: number; autoFocus?: boolean
 }) {
   const Component = area ? 'textarea' : 'input'
   return (
     <label className="field">
       <span>{label}<small>{hint}</small></span>
-      <Component value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} />
+      <Component value={value} maxLength={maxLength} autoFocus={autoFocus} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} />
+      {area && <small className="field-counter" aria-hidden="true">{value.length}/{maxLength}</small>}
     </label>
   )
 }
 
 function Mark() {
-  return <div className="mark" aria-label="Niyat"><i /><i /><i /></div>
+  return <div className="mark" aria-hidden="true"><i /><i /><i /></div>
 }
 
 /** The intent the member works on: the first one they can still act on, newest first. */
@@ -47,11 +51,14 @@ function App({ data }: { data: AppData }) {
   const { starterIntent, people, circles, initialRequests } = data
   const network = useNetwork()
   const [screen, setScreen] = useState<Screen>('home')
-  const [draft, setDraft] = usePersistentState<IntentDraft>(storageKeys.intentDraft, starterIntent, !network)
+  const [storedDraft, setDraft] = usePersistentState<IntentDraft>(storageKeys.intentDraft, starterIntent, !network)
   const [server, setServer] = useState<ServerState>(network ? { status: 'loading' } : { status: 'local' })
   const [displayName, setDisplayName] = useState('')
+  const [visibility, setVisibility] = useState<Visibility>('matched')
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
+  // Drafts saved before mode/horizon existed still load with sensible defaults.
+  const draft: IntentDraft = { ...emptyDraft, ...storedDraft }
 
   useEffect(() => {
     if (!network) return
@@ -60,11 +67,11 @@ function App({ data }: { data: AppData }) {
     network.connect().then(async session => ({ session, intents: await network.listIntents() })).then(({ session, intents }) => {
       if (cancelled) return
       const intent = pickIntent(intents)
-      if (intent) setDraft({ title: intent.title, outcome: intent.outcome, offers: intent.offers, needs: intent.needs, topics: intent.topics })
-      else setDraft({ title: '', outcome: '', offers: [], needs: [], topics: [] })
+      setDraft(intent ? { title: intent.title, outcome: intent.outcome, offers: intent.offers, needs: intent.needs, topics: intent.topics, mode: intent.mode, horizon: intent.horizon } : emptyDraft)
+      if (intent?.visibility === 'public') setVisibility('public')
       setServer({ status: 'ready', userId: session.userId, profile: session.profile, intent })
     }).catch((error: unknown) => {
-      if (!cancelled) setServer({ status: 'error', message: error instanceof Error ? error.message : 'Server bilan aloqa yo‘q' })
+      if (!cancelled) setServer({ status: 'error', message: describeError(error, 'Server bilan ulanib bo‘lmadi.') })
     })
     return () => { cancelled = true }
   }, [network, setDraft])
@@ -72,21 +79,29 @@ function App({ data }: { data: AppData }) {
   const serverIntent = server.status === 'ready' ? server.intent : null
   const needsName = server.status === 'ready' && !server.profile
   const intent: Intent = {
-    id: serverIntent?.id ?? 'mine', ...draft, location: 'Global',
-    mode: serverIntent?.mode ?? 'hybrid', horizon: serverIntent?.horizon ?? 'quarter', visibility: 'network',
+    id: serverIntent?.id ?? 'mine', title: draft.title, outcome: draft.outcome, offers: draft.offers, needs: draft.needs, topics: draft.topics,
+    location: 'Global', mode: draft.mode ?? 'hybrid', horizon: draft.horizon ?? 'quarter', visibility: 'network',
   }
-  const fields = [draft.title.trim(), draft.outcome.trim(), draft.offers.length, draft.needs.length, draft.topics.length, ...(needsName ? [displayName.trim()] : [])]
-  const completeness = Math.round(fields.filter(Boolean).length / fields.length * 100)
+  const checklist = [
+    ...(needsName ? [{ label: 'Ismingiz', done: displayName.trim().length > 0 }] : []),
+    { label: 'Nima qurmoqchisiz', done: draft.title.trim().length > 0 },
+    { label: 'Kutilgan natija', done: draft.outcome.trim().length > 0 },
+    { label: 'Kamida bitta taklif', done: draft.offers.length > 0 },
+    { label: 'Kamida bitta ehtiyoj', done: draft.needs.length > 0 },
+    { label: 'Kamida bitta mavzu', done: draft.topics.length > 0 },
+  ]
+  const completeness = Math.round(checklist.filter(item => item.done).length / checklist.length * 100)
+  const ready = completeness === 100
   const viewer: Viewer = server.status === 'ready'
     ? { name: server.profile?.displayName ?? 'Siz', subtitle: server.profile?.verificationLevel ? 'Tasdiqlangan a’zo' : 'Private alpha a’zosi', verified: Boolean(server.profile?.verificationLevel) }
     : demoViewer
 
   function update<K extends keyof IntentDraft>(key: K, value: IntentDraft[K]) {
-    setDraft((current) => ({ ...current, [key]: value }))
+    setDraft((current) => ({ ...emptyDraft, ...current, [key]: value }))
   }
 
   async function publish() {
-    if (completeness < 100 || saving) return
+    if (!ready || saving) return
     if (!network || server.status !== 'ready') { setScreen('product'); return }
     setSaving(true)
     setSaveError('')
@@ -94,18 +109,14 @@ function App({ data }: { data: AppData }) {
       const profile = server.profile ?? await network.saveProfile({ displayName: displayName.trim(), bio: '', languages: ['uz'] })
       const current = server.intent && editableStatuses.includes(server.intent.status) ? server.intent : null
       const input: IntentInput = {
-        ...draft,
-        mode: current?.mode ?? 'hybrid',
-        horizon: current?.horizon ?? 'quarter',
-        // Publishing is an explicit choice to be matched, so a private draft becomes matchable.
-        visibility: current && current.visibility !== 'private' ? current.visibility : 'matched',
-        status: 'active',
+        title: draft.title.trim(), outcome: draft.outcome.trim(), offers: draft.offers, needs: draft.needs, topics: draft.topics,
+        mode: draft.mode ?? 'hybrid', horizon: draft.horizon ?? 'quarter', visibility, status: 'active',
       }
       const saved = current ? await network.updateIntent(current.id, input) : await network.createIntent(input)
       setServer({ ...server, profile, intent: saved })
       setScreen('product')
     } catch (error) {
-      setSaveError(error instanceof Error ? error.message : 'Niyat saqlanmadi')
+      setSaveError(describeError(error, 'Niyat saqlanmadi. Qayta urinib ko‘ring.'))
     } finally {
       setSaving(false)
     }
@@ -129,26 +140,28 @@ function App({ data }: { data: AppData }) {
     )
   }
 
+  const editing = serverIntent?.status === 'active'
+
   return (
     <main>
-      <nav>
-        <button className="brand" onClick={() => setScreen('home')}><Mark /><b>niyat</b><em>beta</em></button>
-        <div className="nav-center"><span className="live-dot" /> {network ? 'Private alpha' : 'Local demo'}</div>
+      <nav className="top-nav" aria-label="Asosiy">
+        <button className="brand" onClick={() => setScreen('home')} aria-label="Niyat — bosh sahifa"><Mark /><b>niyat</b><em>beta</em></button>
+        <div className="nav-center"><span className="live-dot" aria-hidden="true" /> {network ? 'Private alpha' : 'Local demo · ma’lumot shu brauzerda'}</div>
         <button aria-label="Niyatni tahrirlash" className="avatar" onClick={() => setScreen('create')}>{viewer.name[0]?.toUpperCase()}</button>
       </nav>
 
       {server.status === 'loading' && <div className="api-status" role="status">Server ma’lumotlari yuklanmoqda…</div>}
-      {server.status === 'error' && <div className="api-status error" role="alert">Server bilan ulanib bo‘lmadi: {server.message}</div>}
+      {server.status === 'error' && <div className="api-status error" role="alert">{server.message} <button onClick={() => window.location.reload()}>Qayta urinish</button></div>}
 
       {screen === 'home' && (
         <section className="home">
-          <div className="eyebrow"><span>✦</span> PEOPLE, NOT PROFILES</div>
+          <div className="eyebrow"><span aria-hidden="true">✦</span> Profil emas — niyat</div>
           <h1>Kerakli insonni emas.<br /><strong>Kerakli <i>to‘qnashuvni</i> top.</strong></h1>
           <p className="lead">Niyatingni ayt. Biz sen bera oladigan va olishing kerak bo‘lgan narsalar kesishgan insonlarni topamiz.</p>
           <div className="hero-actions">
-            <button className="primary" onClick={() => setScreen('create')}>Niyat yaratish <span>↗</span></button>
+            <button className="primary" onClick={() => setScreen('create')}>{editing ? 'Niyatni tahrirlash' : 'Niyat yaratish'} <span aria-hidden="true">↗</span></button>
             <button className="text-button" disabled={server.status === 'loading'} onClick={openWorkspace}>
-              {network ? 'Workspace’ni ochish' : 'Jonli demoni ko‘rish'} <span>→</span>
+              {network ? 'Workspace’ni ochish' : 'Jonli demoni ko‘rish'} <span aria-hidden="true">→</span>
             </button>
           </div>
           <div className="constellation" aria-hidden="true">
@@ -167,32 +180,53 @@ function App({ data }: { data: AppData }) {
       )}
 
       {screen === 'create' && (
-        <section className="workspace">
+        <section className="workspace" aria-labelledby="capsule-title">
           <header className="section-head">
-            <div><span className="kicker">INTENT CAPSULE / 001</span><h2>Niyatingni aniq qil.</h2><p>Algoritm unvonlarni emas, o‘zaro qiymatni qidiradi.</p></div>
-            <div className="completion"><b>{completeness}%</b><span>ANIQLIK</span><div><i style={{ width: `${completeness}%` }} /></div></div>
+            <div><span className="kicker">Niyat kapsulasi</span><h2 id="capsule-title">{editing ? 'Niyatingni yangila.' : 'Niyatingni aniq qil.'}</h2><p>Algoritm unvonlarni emas, o‘zaro qiymatni qidiradi.</p></div>
+            <div className="completion" aria-live="polite"><b>{completeness}%</b><span>Aniqlik</span><div role="progressbar" aria-label="Kapsula to‘liqligi" aria-valuenow={completeness} aria-valuemin={0} aria-valuemax={100}><i style={{ width: `${completeness}%` }} /></div></div>
           </header>
           <div className="builder">
-            <form className="form-card" onSubmit={(event) => { event.preventDefault(); void publish() }}>
-              {needsName && <Field label="Ismingiz" hint="Faqat rozilikdan keyin ko‘rinadi" value={displayName} onChange={setDisplayName} placeholder="Masalan: Aziza Karimova" />}
-              <Field label="Nima qurmoqchisan?" hint="Bir jumlada" value={draft.title} onChange={(v) => update('title', v)} placeholder="Masalan: yangi avlod ta’lim platformasi" />
-              <Field area label="Qanday natija ko‘rmoqchisan?" hint="O‘lchash mumkin bo‘lsin" value={draft.outcome} onChange={(v) => update('outcome', v)} placeholder="90 kun ichida..." />
-              <Field label="Sen nima bera olasan?" hint="Vergul bilan ajrat" value={draft.offers.join(', ')} onChange={(v) => update('offers', parseTags(v))} placeholder="engineering, auditoriya, tajriba" />
-              <Field label="Senga nima kerak?" hint="Halol va konkret bo‘l" value={draft.needs.join(', ')} onChange={(v) => update('needs', parseTags(v))} placeholder="design, distribution, capital" />
-              <Field label="Asosiy mavzular" hint="Ko‘pi bilan 8 ta" value={draft.topics.join(', ')} onChange={(v) => update('topics', parseTags(v))} placeholder="AI, climate, education" />
+            <form className="form-card" onSubmit={(event) => { event.preventDefault(); void publish() }} noValidate>
+              <div className="form-section">
+                <h3>1 · Niyat</h3>
+                {needsName && <Field label="Ismingiz" hint="Faqat rozilikdan keyin ko‘rinadi" value={displayName} onChange={setDisplayName} placeholder="Masalan: Aziza Karimova" maxLength={80} autoFocus />}
+                <Field label="Nima qurmoqchisan?" hint="Bir jumlada" value={draft.title} onChange={(v) => update('title', v)} placeholder="Masalan: bolalar uchun AI o‘qituvchi" maxLength={160} />
+                <Field area label="Qanday natija ko‘rmoqchisan?" hint="O‘lchash mumkin bo‘lsin" value={draft.outcome} onChange={(v) => update('outcome', v)} placeholder="Masalan: 90 kunda 100 oilada sinovdan o‘tkazish" maxLength={2000} />
+              </div>
+              <div className="form-section">
+                <h3>2 · Almashinuv</h3>
+                <TagInput label="Sen nima bera olasan?" hint="Qobiliyat, tajriba, resurs" values={draft.offers} onChange={(v) => update('offers', v)} placeholder="engineering, auditoriya, tajriba" />
+                <TagInput label="Senga nima kerak?" hint="Halol va konkret bo‘l" values={draft.needs} onChange={(v) => update('needs', v)} placeholder="design, distribution, investitsiya" tone="warm" />
+                <TagInput label="Asosiy mavzular" hint="Kontekstni aniqlaydi" values={draft.topics} onChange={(v) => update('topics', v)} placeholder="AI, ta’lim, iqlim" />
+              </div>
+              <div className="form-section">
+                <h3>3 · Format</h3>
+                <div className="field-row">
+                  <Segmented label="Ishlash formati" value={draft.mode ?? 'hybrid'} onChange={(v) => update('mode', v)} options={(['online', 'offline', 'hybrid'] as const).map(value => ({ value, label: modeLabels[value] }))} />
+                  <Segmented label="Muddat" value={draft.horizon ?? 'quarter'} onChange={(v) => update('horizon', v)} options={(['now', 'month', 'quarter'] as const).map(value => ({ value, label: horizonLabels[value] }))} />
+                </div>
+                {network && <Segmented label="Kim ko‘radi" value={visibility} onChange={setVisibility} options={[{ value: 'matched', label: 'Faqat match’lar' }, { value: 'public', label: 'Barcha a’zolar' }]} />}
+              </div>
+              {!ready && (
+                <div className="form-section" aria-live="polite">
+                  <h3>E’lon qilish uchun qoldi</h3>
+                  <ul className="checklist">{checklist.map(item => <li key={item.label} className={item.done ? 'done' : ''}><i aria-hidden="true">✓</i><span>{item.label}{item.done ? '' : ' — to‘ldirilmagan'}</span></li>)}</ul>
+                </div>
+              )}
               {saveError && <p className="form-error" role="alert">{saveError}</p>}
-              <button className="primary publish" disabled={completeness < 100 || saving || server.status === 'loading'}>
-                {saving ? 'Saqlanmoqda…' : serverIntent?.status === 'active' ? 'Niyatni yangilash' : 'Niyatni tarmoqqa chiqarish'} <span>→</span>
+              <button className="primary publish" disabled={!ready || saving || server.status === 'loading'}>
+                {saving ? 'Saqlanmoqda…' : editing ? 'O‘zgarishlarni saqlash' : 'Niyatni tarmoqqa chiqarish'} <span aria-hidden="true">→</span>
               </button>
             </form>
-            <aside className="preview">
-              <span className="kicker">LIVE CAPSULE</span>
-              <div className="capsule-glow" />
+            <aside className="preview" aria-label="Kapsula ko‘rinishi">
+              <span className="kicker">Jonli ko‘rinish</span>
+              <div className="capsule-glow" aria-hidden="true" />
               <h3>{draft.title || 'Sening niyating shu yerda paydo bo‘ladi'}</h3>
               <p>{draft.outcome || 'Aniq natijani yozsang, tarmoq kerakli kesishmalarni topadi.'}</p>
-              <TagGroup title="BERAMAN" tags={draft.offers} empty="Qobiliyatlaring" />
-              <TagGroup title="KERAK" tags={draft.needs} empty="Ehtiyojlaring" warm />
-              <div className="privacy"><span>◉</span><div><b>Consent-first</b><small>Ismingiz va kontaktingiz faqat ikki tomon roziligidan keyin ochiladi.</small></div></div>
+              <div className="preview-meta"><span>{modeLabels[draft.mode ?? 'hybrid']}</span><span>{horizonLabels[draft.horizon ?? 'quarter']}</span>{network && <span>{visibility === 'public' ? 'Barcha a’zolar' : 'Faqat match’lar'}</span>}</div>
+              <TagGroup title="Beraman" tags={draft.offers} empty="Qobiliyatlaring" />
+              <TagGroup title="Kerak" tags={draft.needs} empty="Ehtiyojlaring" warm />
+              <div className="privacy"><span aria-hidden="true">◉</span><div><b>Rozilik birinchi</b><small>Ismingiz va kontaktingiz faqat ikki tomon roziligidan keyin ochiladi. Match’larda faqat niyatingiz ko‘rinadi.</small></div></div>
             </aside>
           </div>
         </section>
@@ -202,7 +236,7 @@ function App({ data }: { data: AppData }) {
 }
 
 function TagGroup({ title, tags, empty, warm = false }: { title: string; tags: string[]; empty: string; warm?: boolean }) {
-  return <div className="tag-group"><span>{title}</span><div>{tags.length ? tags.map(tag => <i className={warm ? 'warm' : ''} key={tag}>{tag}</i>) : <i className="ghost">{empty}</i>}</div></div>
+  return <div className="tag-group"><span>{title.toUpperCase()}</span><div>{tags.length ? tags.map(tag => <i className={warm ? 'warm' : ''} key={tag}>{tag}</i>) : <i className="ghost">{empty}</i>}</div></div>
 }
 
 export default App
