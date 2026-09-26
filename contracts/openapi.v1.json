@@ -185,7 +185,7 @@
               }
             }
           },
-          "403": {
+          "401": {
             "$ref": "#/components/responses/Error"
           },
           "404": {
@@ -245,6 +245,9 @@
           },
           "404": {
             "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
           }
         }
       }
@@ -274,7 +277,10 @@
               }
             }
           },
-          "403": {
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
             "$ref": "#/components/responses/Error"
           }
         }
@@ -444,6 +450,12 @@
           "400": {
             "$ref": "#/components/responses/Error"
           },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
           "409": {
             "$ref": "#/components/responses/Error"
           }
@@ -492,6 +504,9 @@
             }
           },
           "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
             "$ref": "#/components/responses/Error"
           },
           "429": {
@@ -1665,11 +1680,16 @@
         "additionalProperties": false,
         "required": [
           "id",
+          "leftIntentId",
+          "rightIntentId",
           "score",
+          "status",
+          "youReceive",
+          "theyReceive",
           "reasons",
           "limitations",
-          "leftIntentId",
-          "rightIntentId"
+          "counterpart",
+          "intro"
         ],
         "properties": {
           "id": {
@@ -1684,7 +1704,27 @@
           "score": {
             "type": "number",
             "minimum": 0,
-            "maximum": 100
+            "maximum": 100,
+            "description": "Match strength, not a probability"
+          },
+          "status": {
+            "enum": [
+              "shown",
+              "intro_requested",
+              "connected"
+            ]
+          },
+          "youReceive": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "theyReceive": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
           "reasons": {
             "type": "array",
@@ -1697,6 +1737,45 @@
             "items": {
               "type": "string"
             }
+          },
+          "counterpart": {
+            "$ref": "#/components/schemas/MatchCounterpart"
+          },
+          "intro": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id",
+                  "status",
+                  "direction"
+                ],
+                "properties": {
+                  "id": {
+                    "$ref": "#/components/schemas/Uuid"
+                  },
+                  "status": {
+                    "enum": [
+                      "pending",
+                      "accepted",
+                      "declined",
+                      "cancelled",
+                      "expired"
+                    ]
+                  },
+                  "direction": {
+                    "enum": [
+                      "incoming",
+                      "outgoing"
+                    ]
+                  }
+                }
+              }
+            ]
           }
         }
       },
@@ -1777,7 +1856,8 @@
               "declined",
               "cancelled",
               "expired"
-            ]
+            ],
+            "description": "A pending request past expiresAt is reported as expired"
           },
           "expiresAt": {
             "type": "string",
@@ -1786,6 +1866,17 @@
           "createdAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "counterpart": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/IntroCounterpart"
+              }
+            ],
+            "description": "Null when a block hides the other participant"
           }
         }
       },
@@ -1834,6 +1925,146 @@
           "details": {
             "type": "string",
             "maxLength": 2000
+          }
+        }
+      },
+      "MatchCounterpart": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "userId",
+          "displayName",
+          "verificationLevel",
+          "intent"
+        ],
+        "description": "The other side of a match. displayName stays null until an intro on this match is accepted.",
+        "properties": {
+          "userId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "displayName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "verificationLevel": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 3
+          },
+          "intent": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "title",
+              "outcome",
+              "offers",
+              "needs",
+              "topics",
+              "mode",
+              "horizon"
+            ],
+            "properties": {
+              "id": {
+                "$ref": "#/components/schemas/Uuid"
+              },
+              "title": {
+                "type": "string"
+              },
+              "outcome": {
+                "type": "string"
+              },
+              "offers": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "needs": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "topics": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "mode": {
+                "enum": [
+                  "online",
+                  "offline",
+                  "hybrid"
+                ]
+              },
+              "horizon": {
+                "enum": [
+                  "now",
+                  "month",
+                  "quarter"
+                ]
+              }
+            }
+          }
+        }
+      },
+      "IntroCounterpart": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "userId",
+          "displayName",
+          "verificationLevel",
+          "intent"
+        ],
+        "properties": {
+          "userId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "displayName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "verificationLevel": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 3
+          },
+          "intent": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "title",
+              "offers",
+              "needs"
+            ],
+            "properties": {
+              "id": {
+                "$ref": "#/components/schemas/Uuid"
+              },
+              "title": {
+                "type": "string"
+              },
+              "offers": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "needs": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }

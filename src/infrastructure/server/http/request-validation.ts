@@ -1,3 +1,4 @@
+import { InvalidCursorError } from '../../../application/intents/intent'
 import { ApplicationError } from '../../../application/intros/intro-request'
 import { IdempotencyConflictError } from '../ports'
 import { HttpError } from './security'
@@ -43,14 +44,23 @@ export function assertUuid(value: string, field: string): void {
   if (!uuid.test(value)) throw new HttpError(400, 'invalid_request', `${field} must be a UUID`, field)
 }
 
+export function readPage(url: URL): { cursor?: string; limit: number } {
+  const limitParam = url.searchParams.get('limit') ?? '20'
+  const limit = Number(limitParam)
+  if (!/^\d{1,3}$/.test(limitParam) || limit < 1 || limit > 100) throw new HttpError(400, 'invalid_request', 'limit must be an integer from 1 to 100', 'limit')
+  const cursor = url.searchParams.get('cursor') ?? undefined
+  if (cursor !== undefined && (cursor.length < 1 || cursor.length > 512)) throw new HttpError(400, 'invalid_request', 'cursor is invalid', 'cursor')
+  return { cursor, limit }
+}
+
+const statusFor = { forbidden: 403, not_found: 404, conflict: 409, rate_limited: 429 } as const
+
 export function problem(error: unknown, requestId: string): Response {
-  const mapped = error instanceof HttpError
-    ? error
-    : error instanceof IdempotencyConflictError
-      ? new HttpError(409, 'idempotency_conflict', error.message)
-      : error instanceof ApplicationError
-        ? new HttpError(error.code === 'forbidden' ? 403 : error.code === 'not_found' ? 404 : 409, error.code, error.message)
-        : new HttpError(500, 'internal_error', 'An unexpected error occurred')
+  const mapped = error instanceof HttpError ? error
+    : error instanceof InvalidCursorError ? new HttpError(400, 'invalid_request', error.message, 'cursor')
+    : error instanceof IdempotencyConflictError ? new HttpError(409, 'idempotency_conflict', error.message)
+    : error instanceof ApplicationError ? new HttpError(statusFor[error.code], error.code, error.message)
+    : new HttpError(500, 'internal_error', 'An unexpected error occurred')
   return Response.json(
     { code: mapped.code, message: mapped.message, ...(mapped.field ? { field: mapped.field } : {}), requestId },
     { status: mapped.status, headers: { 'content-type': 'application/problem+json' } },

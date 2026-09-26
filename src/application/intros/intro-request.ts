@@ -10,6 +10,15 @@ export type ServerIntroRequest = {
   status: IntroRequestStatus
   expiresAt: string
   createdAt: string
+  /** The other participant as the actor may see them; null when a block hides them. */
+  counterpart?: IntroCounterpart | null
+}
+
+export type IntroCounterpart = {
+  userId: string
+  displayName: string | null
+  verificationLevel: number
+  intent: { id: string; title: string; offers: string[]; needs: string[] }
 }
 
 export type CreateIntroRequestCommand = {
@@ -33,7 +42,7 @@ export interface IntroRequestGateway {
 
 export class ApplicationError extends Error {
   constructor(
-    readonly code: 'forbidden' | 'not_found' | 'conflict',
+    readonly code: 'forbidden' | 'not_found' | 'conflict' | 'rate_limited',
     message: string,
   ) {
     super(message)

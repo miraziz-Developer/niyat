@@ -1,6 +1,7 @@
 import { ApplicationError } from '../../../application/intros/intro-request'
 import { InvalidCursorError, type CreateIntentCommand, type IntentCommand, type IntentGateway, type IntentPage, type ListIntentsQuery, type ServerIntent, type UpdateIntentCommand } from '../../../application/intents/intent'
-import type { SqlDatabase, SqlExecutor } from '../ports'
+import type { SqlDatabase } from '../ports'
+import { withActor, toIso } from './actor-transaction'
 
 type IntentRow = Record<string, unknown> & {
   id: string
@@ -27,7 +28,7 @@ export class PostgresIntentGateway implements IntentGateway {
   constructor(private readonly database: SqlDatabase) {}
 
   create({ actorId, input }: CreateIntentCommand): Promise<ServerIntent> {
-    return this.withActor(actorId, async transaction => {
+    return withActor(this.database, actorId, async transaction => {
       const result = await transaction.query<IntentRow>(`
         INSERT INTO intents (owner_id, title, outcome, offers, needs, topics, mode, horizon, visibility, status, published_at)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, CASE WHEN $10::intent_status = 'draft' THEN NULL ELSE now() END)
@@ -38,14 +39,14 @@ export class PostgresIntentGateway implements IntentGateway {
   }
 
   find({ actorId, intentId }: IntentCommand): Promise<ServerIntent | null> {
-    return this.withActor(actorId, async transaction => {
+    return withActor(this.database, actorId, async transaction => {
       const result = await transaction.query<IntentRow>(`SELECT ${columns} FROM intents WHERE id = $1 AND owner_id = $2`, [intentId, actorId])
       return result.rows[0] ? mapIntent(result.rows[0]) : null
     })
   }
 
   update({ actorId, intentId, input }: UpdateIntentCommand, assertTransition: (current: ServerIntent) => void): Promise<ServerIntent | null> {
-    return this.withActor(actorId, async transaction => {
+    return withActor(this.database, actorId, async transaction => {
       const current = await transaction.query<IntentRow>(`SELECT ${columns} FROM intents WHERE id = $1 AND owner_id = $2 FOR UPDATE`, [intentId, actorId])
       if (!current.rows[0]) return null
       assertTransition(mapIntent(current.rows[0]))
@@ -62,7 +63,7 @@ export class PostgresIntentGateway implements IntentGateway {
   }
 
   remove({ actorId, intentId }: IntentCommand): Promise<boolean> {
-    return this.withActor(actorId, async transaction => {
+    return withActor(this.database, actorId, async transaction => {
       const owned = await transaction.query(`SELECT id FROM intents WHERE id = $1 AND owner_id = $2 FOR UPDATE`, [intentId, actorId])
       if (!owned.rows[0]) return false
       // Locking the matches blocks a concurrent intro insert (its FK takes KEY SHARE) until this delete settles.
@@ -82,7 +83,7 @@ export class PostgresIntentGateway implements IntentGateway {
 
   async list({ actorId, cursor, limit }: ListIntentsQuery): Promise<IntentPage> {
     const after = cursor === undefined ? null : decodeCursor(cursor)
-    return this.withActor(actorId, async transaction => {
+    return withActor(this.database, actorId, async transaction => {
       const result = await transaction.query<IntentRow>(`
         SELECT ${columns} FROM intents
         WHERE owner_id = $1 AND ($2::timestamptz IS NULL OR (updated_at, id) < ($2::timestamptz, $3::uuid))
@@ -95,13 +96,6 @@ export class PostgresIntentGateway implements IntentGateway {
         items: rows.map(row => mapIntent(row)),
         page: { nextCursor: result.rows.length > limit && last ? encodeCursor(last.cursor_at, last.id) : null },
       }
-    })
-  }
-
-  private withActor<T>(actorId: string, work: (transaction: SqlExecutor) => Promise<T>): Promise<T> {
-    return this.database.transaction(async transaction => {
-      await transaction.query(`SELECT set_config('app.user_id', $1, true)`, [actorId])
-      return work(transaction)
     })
   }
 }
@@ -136,8 +130,4 @@ function mapIntent(row: IntentRow | undefined): ServerIntent {
     createdAt: toIso(row.created_at),
     updatedAt: toIso(row.updated_at),
   }
-}
-
-function toIso(value: Date | string): string {
-  return value instanceof Date ? value.toISOString() : new Date(value).toISOString()
 }

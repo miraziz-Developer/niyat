@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks'
 import type { Pool, PoolClient, QueryResultRow } from 'pg'
 import type { SqlDatabase, SqlExecutor, SqlResult } from '../ports'
 
@@ -10,18 +11,28 @@ class PgExecutor implements SqlExecutor {
   }
 }
 
+/**
+ * Nested `transaction` calls join the ambient transaction instead of opening a new one.
+ * This is the Unit of Work that lets the idempotency record commit atomically with the business change.
+ */
 export class PgDatabase implements SqlDatabase {
+  private readonly ambient = new AsyncLocalStorage<SqlExecutor>()
+
   constructor(private readonly pool: Pool) {}
 
   async transaction<T>(work: (transaction: SqlExecutor) => Promise<T>): Promise<T> {
+    const current = this.ambient.getStore()
+    if (current) return work(current)
+
     const client = await this.pool.connect()
     try {
       await client.query('BEGIN')
-      const result = await work(new PgExecutor(client))
+      const executor = new PgExecutor(client)
+      const result = await this.ambient.run(executor, () => work(executor))
       await client.query('COMMIT')
       return result
     } catch (error) {
-      await client.query('ROLLBACK')
+      await client.query('ROLLBACK').catch(() => undefined)
       throw error
     } finally {
       client.release()

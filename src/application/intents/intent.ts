@@ -68,12 +68,22 @@ export function assertIntentTransition(from: IntentStatus, to: IntentInputStatus
   }
 }
 
-export class ManageIntents {
-  constructor(private readonly gateway: IntentGateway) {}
+/** Keeps derived matches consistent with the intent that produced them. */
+export interface IntentChangeListener {
+  refresh(actorId: string, intentId: string): Promise<unknown>
+}
 
-  create(command: CreateIntentCommand) {
+export class ManageIntents {
+  constructor(
+    private readonly gateway: IntentGateway,
+    private readonly matches?: IntentChangeListener,
+  ) {}
+
+  async create(command: CreateIntentCommand): Promise<ServerIntent> {
     assertIntentCreationStatus(command.input.status)
-    return this.gateway.create({ ...command, input: normalize(command.input) })
+    const intent = await this.gateway.create({ ...command, input: normalize(command.input) })
+    await this.matches?.refresh(command.actorId, intent.id)
+    return intent
   }
 
   async get(command: IntentCommand): Promise<ServerIntent> {
@@ -82,7 +92,9 @@ export class ManageIntents {
 
   async update(command: UpdateIntentCommand): Promise<ServerIntent> {
     const input = normalize(command.input)
-    return found(await this.gateway.update({ ...command, input }, current => assertIntentTransition(current.status, input.status)))
+    const intent = found(await this.gateway.update({ ...command, input }, current => assertIntentTransition(current.status, input.status)))
+    await this.matches?.refresh(command.actorId, intent.id)
+    return intent
   }
 
   async remove(command: IntentCommand): Promise<void> {

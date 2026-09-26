@@ -5,12 +5,13 @@ const migration = readFileSync(new URL('../db/migrations/0001_gate2_foundation.u
 const introAuthorizationMigration = readFileSync(new URL('../db/migrations/0002_intro_authorization.up.sql', import.meta.url), 'utf8')
 const outcomeMigration = readFileSync(new URL('../db/migrations/0003_collaboration_outcomes.up.sql', import.meta.url), 'utf8')
 const runtimeMigration = readFileSync(new URL('../db/migrations/0004_runtime_foundation.up.sql', import.meta.url), 'utf8')
+const matchingMigration = readFileSync(new URL('../db/migrations/0005_matching_safety.up.sql', import.meta.url), 'utf8')
 
 const requiredPaths = ['/session', '/me/profile', '/intents', '/intents/{intentId}', '/intents/{intentId}/matches', '/matches/{matchId}/intro-requests', '/intro-requests', '/intro-requests/{requestId}', '/intro-requests/{requestId}/collaboration', '/me/collaborations', '/collaborations/{collaborationId}/milestones/{milestoneId}/complete', '/collaborations/{collaborationId}/outcome-verifications', '/outcome-verifications/{verificationId}', '/me/trust-signals', '/blocks', '/reports']
 const requiredTables = ['users', 'profiles', 'intents', 'matches', 'intro_requests', 'blocks', 'reports', 'audit_events']
 const outcomeTables = ['collaborations', 'collaboration_milestones', 'outcome_verifications', 'trust_signals']
 const runtimeTables = ['sessions', 'idempotency_records']
-const requiredSchemas = ['Profile', 'Intent', 'Match', 'IntroRequest', 'Collaboration', 'Milestone', 'OutcomeVerification', 'TrustSignal']
+const requiredSchemas = ['Profile', 'Intent', 'Match', 'MatchCounterpart', 'IntroCounterpart', 'IntroRequest', 'Collaboration', 'Milestone', 'OutcomeVerification', 'TrustSignal']
 const failures = []
 
 if (contract.openapi !== '3.1.0') failures.push('OpenAPI version must be 3.1.0')
@@ -36,6 +37,9 @@ for (const marker of ['SECURITY DEFINER', 'SET search_path = pg_catalog, public,
 }
 for (const marker of ['ENABLE ROW LEVEL SECURITY', 'collaboration_outcome_transition_guard', 'milestone_completion_guard', 'outcome_verification_request_guard', 'outcome_verification_resolution_guard', 'only a distinct counterparty may resolve verification', 'outcome_one_pending_per_collaboration_idx', 'trust_distinct_participants']) {
   if (!outcomeMigration.includes(marker)) failures.push(`Outcome migration safety marker missing: ${marker}`)
+}
+for (const marker of ['ALTER TABLE matches ENABLE ROW LEVEL SECURITY', 'matches_participant_all', 'SECURITY DEFINER', 'SET search_path = pg_catalog, public, pg_temp', "visibility <> 'private'", 'public.blocks', 'REVOKE ALL ON FUNCTION matchable_intents', 'REVOKE ALL ON FUNCTION match_counterpart', "intro_requests.status = 'accepted'"]) {
+  if (!matchingMigration.includes(marker)) failures.push(`Matching migration safety marker missing: ${marker}`)
 }
 
 visit(contract, value => {

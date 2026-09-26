@@ -1,17 +1,18 @@
-import type { Pool } from 'pg'
-import { IdempotencyConflictError, type IdempotencyStore } from '../ports'
+import { IdempotencyConflictError, type IdempotencyStore, type SqlDatabase } from '../ports'
 
-type RecordRow = { fingerprint: string; response: unknown }
+type RecordRow = Record<string, unknown> & { fingerprint: string; response: unknown }
 
+/**
+ * Runs the action inside the same database transaction that stores its response.
+ * Either both the business change and the replay record commit, or neither does.
+ */
 export class PostgresIdempotencyStore implements IdempotencyStore {
-  constructor(private readonly pool: Pool) {}
+  constructor(private readonly database: SqlDatabase) {}
 
-  async run<T>(actorId: string, operation: string, key: string, fingerprint: string, action: () => Promise<T>): Promise<T> {
-    const client = await this.pool.connect()
-    const lock = `${actorId}:${operation}:${key}`
-    try {
-      await client.query('SELECT pg_advisory_lock(hashtextextended($1, 0))', [lock])
-      const existing = await client.query<RecordRow>(`
+  run<T>(actorId: string, operation: string, key: string, fingerprint: string, action: () => Promise<T>): Promise<T> {
+    return this.database.transaction(async transaction => {
+      await transaction.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`${actorId}:${operation}:${key}`])
+      const existing = await transaction.query<RecordRow>(`
         SELECT fingerprint, response FROM idempotency_records
         WHERE actor_id = $1 AND operation = $2 AND idempotency_key = $3 AND expires_at > now()`, [actorId, operation, key])
       if (existing.rows[0]) {
@@ -19,17 +20,14 @@ export class PostgresIdempotencyStore implements IdempotencyStore {
         return existing.rows[0].response as T
       }
       const result = await action()
-      await client.query(`
+      await transaction.query(`
         INSERT INTO idempotency_records (actor_id, operation, idempotency_key, fingerprint, response)
         VALUES ($1, $2, $3, $4, $5::jsonb)
         ON CONFLICT (actor_id, operation, idempotency_key) DO UPDATE
         SET fingerprint = EXCLUDED.fingerprint, response = EXCLUDED.response,
             created_at = now(), expires_at = now() + interval '24 hours'
-        WHERE idempotency_records.expires_at <= now()`, [actorId, operation, key, fingerprint, JSON.stringify(result)])
+        WHERE idempotency_records.expires_at <= now()`, [actorId, operation, key, fingerprint, JSON.stringify(result ?? null)])
       return result
-    } finally {
-      await client.query('SELECT pg_advisory_unlock(hashtextextended($1, 0))', [lock]).catch(() => undefined)
-      client.release()
-    }
+    })
   }
 }

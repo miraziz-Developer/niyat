@@ -9,12 +9,14 @@ try {
   await pool.query(`
     INSERT INTO users (id, status, locale, timezone, is_adult_confirmed) VALUES
       ('00000000-0000-4000-8000-000000000001', 'active', 'uz', 'Asia/Tashkent', true),
-      ('00000000-0000-4000-8000-000000000002', 'active', 'uz', 'Asia/Tashkent', true)
+      ('00000000-0000-4000-8000-000000000002', 'active', 'uz', 'Asia/Tashkent', true),
+      ('00000000-0000-4000-8000-000000000003', 'active', 'uz', 'Asia/Tashkent', true)
     ON CONFLICT (id) DO NOTHING;
 
     INSERT INTO profiles (user_id, display_name, bio, city_precision, languages, verification_level) VALUES
       ('00000000-0000-4000-8000-000000000001', 'Private Alpha User', 'NIYAT private alpha workspace', 'city', ARRAY['uz'], 1),
-      ('00000000-0000-4000-8000-000000000002', 'Alpha Counterparty', 'Outcome verification counterparty', 'city', ARRAY['uz'], 1)
+      ('00000000-0000-4000-8000-000000000002', 'Alpha Counterparty', 'Outcome verification counterparty', 'city', ARRAY['uz'], 1),
+      ('00000000-0000-4000-8000-000000000003', 'Alpha Tester', 'Matching and safety tester', 'city', ARRAY['uz', 'en'], 0)
     ON CONFLICT (user_id) DO NOTHING;
 
     INSERT INTO intents (id, owner_id, title, outcome, offers, needs, topics, mode, horizon, status, visibility, location, published_at) VALUES

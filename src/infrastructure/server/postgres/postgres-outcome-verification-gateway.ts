@@ -1,6 +1,7 @@
 import { ApplicationError } from '../../../application/intros/intro-request'
 import { assertCounterpartyResolver, assertParticipant, type CollaborationDetail, type OutcomeVerificationGateway, type ServerCollaboration, type ServerMilestone, type ServerOutcomeVerification, type ServerTrustSignal, type VerificationResult } from '../../../application/outcomes/server-outcome-verification'
 import type { SqlDatabase, SqlExecutor } from '../ports'
+import { withActor, toIso, isUniqueViolation, required } from './actor-transaction'
 
 type CollaborationRow = Record<string, unknown> & { id: string; intro_request_id: string; creator_id: string; counterparty_id: string; title: string; status: ServerCollaboration['status']; created_at: Date | string }
 type MilestoneRow = Record<string, unknown> & { id: string; collaboration_id: string; title: string; position: number; status: ServerMilestone['status']; completed_at: Date | string | null }
@@ -12,7 +13,7 @@ export class PostgresOutcomeVerificationGateway implements OutcomeVerificationGa
   constructor(private readonly database: SqlDatabase) {}
 
   createCollaboration(command: { actorId: string; introRequestId: string; title: string; milestones: string[] }): Promise<CollaborationDetail> {
-    return this.withActor(command.actorId, async transaction => {
+    return withActor(this.database, command.actorId, async transaction => {
       const found = await transaction.query<IntroRow>('SELECT id, sender_id, receiver_id, status FROM intro_requests WHERE id = $1 FOR UPDATE', [command.introRequestId])
       const intro = found.rows[0]
       if (!intro) throw new ApplicationError('not_found', 'Intro request was not found')
@@ -44,7 +45,7 @@ export class PostgresOutcomeVerificationGateway implements OutcomeVerificationGa
   }
 
   completeMilestone(command: { actorId: string; collaborationId: string; milestoneId: string }): Promise<CollaborationDetail> {
-    return this.withActor(command.actorId, async transaction => {
+    return withActor(this.database, command.actorId, async transaction => {
       const collaboration = await this.lockCollaboration(transaction, command.collaborationId)
       assertParticipant(collaboration, command.actorId)
       if (collaboration.status !== 'active') throw new ApplicationError('conflict', 'Only active collaborations can update milestones')
@@ -68,7 +69,7 @@ export class PostgresOutcomeVerificationGateway implements OutcomeVerificationGa
   }
 
   requestVerification(command: { actorId: string; collaborationId: string; evidence: string }): Promise<VerificationResult> {
-    return this.withActor(command.actorId, async transaction => {
+    return withActor(this.database, command.actorId, async transaction => {
       const collaboration = await this.lockCollaboration(transaction, command.collaborationId)
       assertParticipant(collaboration, command.actorId)
       if (collaboration.status !== 'outcome-ready') throw new ApplicationError('conflict', 'Collaboration is not ready for outcome verification')
@@ -85,7 +86,7 @@ export class PostgresOutcomeVerificationGateway implements OutcomeVerificationGa
   }
 
   resolveVerification(command: { actorId: string; verificationId: string; decision: 'confirmed' | 'disputed' }): Promise<VerificationResult> {
-    return this.withActor(command.actorId, async transaction => {
+    return withActor(this.database, command.actorId, async transaction => {
       const found = await transaction.query<VerificationRow>(`
         SELECT id, collaboration_id, requester_id, evidence, status, requested_at, resolved_at, resolved_by
         FROM outcome_verifications WHERE id = $1 FOR UPDATE`, [command.verificationId])
@@ -116,7 +117,7 @@ export class PostgresOutcomeVerificationGateway implements OutcomeVerificationGa
   }
 
   listTrustSignals(actorId: string): Promise<ServerTrustSignal[]> {
-    return this.withActor(actorId, async transaction => {
+    return withActor(this.database, actorId, async transaction => {
       const result = await transaction.query<TrustRow>(`
         SELECT id, collaboration_id, verification_id, subject_id, attester_id, label, issued_at
         FROM trust_signals WHERE subject_id = $1 ORDER BY issued_at DESC`, [actorId])
@@ -125,7 +126,7 @@ export class PostgresOutcomeVerificationGateway implements OutcomeVerificationGa
   }
 
   listCollaborations(actorId: string): Promise<Array<CollaborationDetail & { verification?: ServerOutcomeVerification }>> {
-    return this.withActor(actorId, async transaction => {
+    return withActor(this.database, actorId, async transaction => {
       const result = await transaction.query<CollaborationRow>(`
         SELECT id, intro_request_id, creator_id, counterparty_id, title, status, created_at
         FROM collaborations WHERE creator_id = $1 OR counterparty_id = $1 ORDER BY created_at DESC`, [actorId])
@@ -155,19 +156,9 @@ export class PostgresOutcomeVerificationGateway implements OutcomeVerificationGa
       FROM collaboration_milestones WHERE collaboration_id = $1 ORDER BY position`, [collaborationId])
     return result.rows.map(mapMilestone)
   }
-
-  private withActor<T>(actorId: string, work: (transaction: SqlExecutor) => Promise<T>): Promise<T> {
-    return this.database.transaction(async transaction => {
-      await transaction.query(`SELECT set_config('app.user_id', $1, true)`, [actorId])
-      return work(transaction)
-    })
-  }
 }
 
 function mapCollaboration(row: CollaborationRow): ServerCollaboration { return { id: row.id, introRequestId: row.intro_request_id, creatorId: row.creator_id, counterpartyId: row.counterparty_id, title: row.title, status: row.status, createdAt: toIso(row.created_at) } }
 function mapMilestone(row: MilestoneRow): ServerMilestone { return { id: row.id, collaborationId: row.collaboration_id, title: row.title, position: row.position, status: row.status, ...(row.completed_at ? { completedAt: toIso(row.completed_at) } : {}) } }
 function mapVerification(row: VerificationRow): ServerOutcomeVerification { return { id: row.id, collaborationId: row.collaboration_id, requesterId: row.requester_id, evidence: row.evidence, status: row.status, requestedAt: toIso(row.requested_at), ...(row.resolved_at ? { resolvedAt: toIso(row.resolved_at) } : {}), ...(row.resolved_by ? { resolvedBy: row.resolved_by } : {}) } }
 function mapTrust(row: TrustRow): ServerTrustSignal { return { id: row.id, collaborationId: row.collaboration_id, verificationId: row.verification_id, subjectId: row.subject_id, attesterId: row.attester_id, label: row.label, issuedAt: toIso(row.issued_at) } }
-function required<T>(value: T | undefined, resource: string): T { if (!value) throw new Error(`Database did not return ${resource}`); return value }
-function toIso(value: Date | string): string { return value instanceof Date ? value.toISOString() : new Date(value).toISOString() }
-function isUniqueViolation(error: unknown): boolean { return Boolean(error && typeof error === 'object' && 'code' in error && error.code === '23505') }
