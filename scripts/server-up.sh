@@ -14,12 +14,16 @@ if ! docker compose version >/dev/null 2>&1; then
   exit 1
 fi
 
-if [ ! -f .env ]; then
+random_secret() {
   if command -v openssl >/dev/null 2>&1; then
-    POSTGRES_PASSWORD=$(openssl rand -hex 24)
+    openssl rand -hex 24
   else
-    POSTGRES_PASSWORD=$(od -An -N24 -tx1 /dev/urandom | tr -d ' \n')
+    od -An -N24 -tx1 /dev/urandom | tr -d ' \n'
   fi
+}
+
+if [ ! -f .env ]; then
+  POSTGRES_PASSWORD=$(random_secret)
 
   cat > .env <<EOF
 POSTGRES_DB=niyat
@@ -34,13 +38,22 @@ EOF
   echo "Yangi .env xavfsiz tasodifiy PostgreSQL paroli bilan yaratildi."
 fi
 
+# Older installs predate the runtime role; add its credentials once without touching existing values.
+if ! grep -q '^NIYAT_APP_DB_PASSWORD=' .env; then
+  {
+    echo "NIYAT_APP_DB_USER=niyat_app"
+    echo "NIYAT_APP_DB_PASSWORD=$(random_secret)"
+  } >> .env
+  echo "API uchun alohida, RLS bilan cheklangan database roli paroli .env ga qo‘shildi."
+fi
+
 echo "NIYAT image’lari build qilinmoqda..."
 docker compose build api web
 
 echo "PostgreSQL ishga tushirilmoqda..."
 docker compose up -d --wait postgres
 
-echo "Migrationlar bajarilmoqda..."
+echo "Migrationlar va API database roli tayyorlanmoqda..."
 docker compose run --rm -T migrate </dev/null
 
 if grep -q '^AUTH_MODE=local$' .env; then

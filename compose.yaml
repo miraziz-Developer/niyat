@@ -24,7 +24,10 @@ services:
     image: niyat-api:local
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-niyat}:${POSTGRES_PASSWORD:-niyat_local_only}@postgres:5432/${POSTGRES_DB:-niyat}
-    command: ["npm", "run", "db:migrate"]
+      NIYAT_APP_DB_USER: ${NIYAT_APP_DB_USER:-niyat_app}
+      NIYAT_APP_DB_PASSWORD: ${NIYAT_APP_DB_PASSWORD:-niyat_app_local_only_password}
+    # Schema changes run as the owner; the API itself connects as the least-privilege runtime role.
+    command: ["sh", "-c", "npm run db:migrate && npm run db:provision-role"]
     depends_on:
       postgres:
         condition: service_healthy
@@ -47,7 +50,7 @@ services:
       target: api
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-niyat}:${POSTGRES_PASSWORD:-niyat_local_only}@postgres:5432/${POSTGRES_DB:-niyat}
+      DATABASE_URL: postgresql://${NIYAT_APP_DB_USER:-niyat_app}:${NIYAT_APP_DB_PASSWORD:-niyat_app_local_only_password}@postgres:5432/${POSTGRES_DB:-niyat}
       DATABASE_POOL_SIZE: ${DATABASE_POOL_SIZE:-10}
       NODE_ENV: ${NIYAT_NODE_ENV:-development}
       AUTH_MODE: ${AUTH_MODE:-local}

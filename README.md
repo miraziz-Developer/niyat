@@ -32,6 +32,8 @@ docker compose logs -f api web postgres
 docker compose down
 ```
 
+Migration jadval egasi sifatida bajariladi, API esa alohida `niyat_app` roli bilan ulanadi: u RLS’ni chetlab o‘tmaydi, DDL qila olmaydi va audit jurnaliga faqat yozadi. `server-up.sh` bu rol parolini ham `.env` ga avtomatik qo‘shadi (eski o‘rnatishlarda ham). Production’da API RLS’ni chetlab o‘tadigan rol bilan ishga tushishni rad etadi.
+
 PostgreSQL internetga ochilmaydi; u faqat `127.0.0.1:55432` va ichki Docker network’da mavjud. Persistent data `.local/postgres/` ichida qoladi. Server backup’i `pg_dump` bilan olinishi kerak.
 
 > **Xavfsizlik:** avtomatik bootstrap `AUTH_MODE=local` private alpha uchun. Production identity provider ulanmaguncha `8080` portni ochiq internetga qo‘ymang; firewall yoki VPN bilan cheklang. `NODE_ENV=production` bilan local auth server tomonidan rad etiladi.
@@ -140,4 +142,4 @@ Bu hali production ijtimoiy tarmoq emas. Backend qurishdan oldin 30–50 foydala
 
 Default UI local-first demo bo‘lib qoladi. `VITE_API_MODE=server` rejimida butun workspace serverdan ishlaydi va brauzer storage’iga server ma’lumoti yozilmaydi; requester o‘z natijasini tasdiqlay olmaydi, qarorni faqat hamkor o‘z sessiyasidan beradi. Local demo’dagi counterparty tugmasi faqat prototip simulyatsiyasidir. Circles hozircha faqat demo’da.
 
-Keyingi bosqich: production auth provider, Docker’da alohida non-owner database roli (hozir API jadval egasi sifatida ulanadi va RLS chetlab o‘tiladi), matching uchun background worker, notification va moderator vositalari, analytics va deployment observability. DID/blockchain MVP uchun ataylab qo‘shilmadi.
+Keyingi bosqich: production auth provider, matching uchun background worker, notification va moderator vositalari, analytics va deployment observability. DID/blockchain MVP uchun ataylab qo‘shilmadi.

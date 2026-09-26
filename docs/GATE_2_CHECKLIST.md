@@ -25,7 +25,7 @@ This checklist turns `PRODUCT_BLUEPRINT.md` into verifiable delivery units. `[~]
 - [x] Collaboration/outcome server slice — OpenAPI, reversible PostgreSQL migrations, runtime composition, browser adapter, authorization, durable replay and counterparty-only confirmation verified
 - [x] Single-host private-alpha Docker stack — Nginx frontend, Node API, PostgreSQL, migration/seed jobs and one-command bootstrap
 - [x] Atomic idempotency — replay record commits in the same transaction as the business change
-- [ ] Separate non-owner runtime database role in Docker (RLS is bypassed while the API connects as the table owner)
+- [x] Least-privilege runtime role — migrate job provisions `niyat_app` (NOBYPASSRLS, per-table grants, no DDL, audit INSERT-only); the API refuses to start in production as an RLS-bypassing role
 - [~] Block/report — block closes pending intros and hides the pair from matching; reports are audited and rate-limited (20/day); moderator review tooling open
 - [ ] Notifications and delivery preferences
 - [ ] Invite-only cohort and 30–50 alpha users

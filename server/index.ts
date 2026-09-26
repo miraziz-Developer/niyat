@@ -29,6 +29,7 @@ if (!Number.isInteger(poolSize) || poolSize < 2) throw new Error('DATABASE_POOL_
 const pool = new pg.Pool({ connectionString: databaseUrl, max: poolSize })
 // An idle client can be dropped by PostgreSQL (restart, failover); without this listener the whole process exits.
 pool.on('error', error => console.error('PostgreSQL idle client error', error.message))
+await assertRowLevelSecurity(pool)
 const database = new PgDatabase(pool)
 const sessions = new PostgresSessionResolver(pool)
 const matches = new ManageMatches(new PostgresMatchingGateway(database))
@@ -100,4 +101,17 @@ async function send(response: ServerResponse, value: Response): Promise<void> {
   response.setHeader('cache-control', 'no-store')
   if (value.body) for await (const chunk of Readable.fromWeb(value.body as never)) response.write(chunk)
   response.end()
+}
+
+/** A table owner, superuser or BYPASSRLS role silently disables every RLS policy; production must not run that way. */
+async function assertRowLevelSecurity(connection: pg.Pool): Promise<void> {
+  const result = await connection.query<{ role: string; bypasses: boolean; owns: boolean }>(`
+    SELECT current_user AS role, rolsuper OR rolbypassrls AS bypasses,
+           EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tableowner = current_user) AS owns
+    FROM pg_roles WHERE rolname = current_user`)
+  const identity = result.rows[0]
+  if (!identity?.bypasses && !identity?.owns) return
+  const message = `Database role ${identity.role} bypasses row-level security; connect the API as the provisioned runtime role (npm run db:provision-role)`
+  if (process.env.NODE_ENV === 'production') throw new Error(message)
+  console.warn(`WARNING: ${message}`)
 }
