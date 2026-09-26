@@ -22,21 +22,26 @@ export function CompactMatch({ match, onClick }: { match: Match; onClick: () => 
   )
 }
 
-export function MatchDrawer({ match, alreadySent, onRequest, onClose }: { match: Match; alreadySent: boolean; onRequest: () => void; onClose: () => void }) {
+export function MatchDrawer({ match, alreadySent, busy, onRequest, onBlock, onReport, onClose }: { match: Match; alreadySent: boolean; busy: boolean; onRequest: () => void; onBlock: () => void; onReport: () => void; onClose: () => void }) {
   return (
     <Dialog backdropClassName="drawer-backdrop" panelClassName="match-drawer" label={`${match.person.name} bilan moslik`} onClose={onClose}>
       <button aria-label="Yopish" className="close" onClick={onClose}>×</button>
       <span className="kicker">MATCH STRENGTH · {match.score}</span>
       <PersonSummary person={match.person} large />
       <h3>{match.person.intent.title}</h3>
-      <p className="drawer-outcome">{match.person.intent.outcome}</p>
+      {match.person.intent.outcome && <p className="drawer-outcome">{match.person.intent.outcome}</p>}
       <MutualExchange match={match} compact />
       <div className="reason-list">{match.reasons.map((reason) => <span key={reason}>✓ {reason}</span>)}</div>
+      {match.limitations && match.limitations.length > 0 && <div className="limitation-list" aria-label="Cheklovlar">{match.limitations.map((limitation) => <span key={limitation}>△ {limitation}</span>)}</div>}
       <div className="message"><span>TAKLIF ETILGAN INTRO</span><p>{match.opening}</p></div>
-      <button className="primary full" disabled={alreadySent} onClick={onRequest}>
-        {alreadySent ? '✓ So‘rov yuborilgan' : 'Rozilik bilan intro so‘rash →'}
+      <button className="primary full" disabled={alreadySent || busy} onClick={onRequest}>
+        {alreadySent ? '✓ So‘rov yuborilgan' : busy ? 'Yuborilmoqda…' : 'Rozilik bilan intro so‘rash →'}
       </button>
-      <small className="consent-note">Kontakt faqat qarshi tomon qabul qilgach ochiladi.</small>
+      <small className="consent-note">Ism va kontakt faqat qarshi tomon qabul qilgach ochiladi.</small>
+      <div className="safety-actions">
+        <button disabled={busy} onClick={onReport}>Shikoyat qilish</button>
+        <button className="danger" disabled={busy} onClick={onBlock}>Bloklash</button>
+      </div>
     </Dialog>
   )
 }

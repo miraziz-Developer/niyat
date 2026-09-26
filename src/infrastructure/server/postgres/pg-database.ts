@@ -25,6 +25,9 @@ export class PgDatabase implements SqlDatabase {
     if (current) return work(current)
 
     const client = await this.pool.connect()
+    // A connection dropped between two queries emits on the client; the next query rejects instead of crashing the process.
+    const swallow = () => undefined
+    client.on('error', swallow)
     try {
       await client.query('BEGIN')
       const executor = new PgExecutor(client)
@@ -35,6 +38,7 @@ export class PgDatabase implements SqlDatabase {
       await client.query('ROLLBACK').catch(() => undefined)
       throw error
     } finally {
+      client.off('error', swallow)
       client.release()
     }
   }

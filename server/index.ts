@@ -27,6 +27,8 @@ if (process.env.NODE_ENV === 'production' && process.env.AUTH_MODE === 'local') 
 const poolSize = Number(process.env.DATABASE_POOL_SIZE ?? 10)
 if (!Number.isInteger(poolSize) || poolSize < 2) throw new Error('DATABASE_POOL_SIZE must be an integer of at least 2')
 const pool = new pg.Pool({ connectionString: databaseUrl, max: poolSize })
+// An idle client can be dropped by PostgreSQL (restart, failover); without this listener the whole process exits.
+pool.on('error', error => console.error('PostgreSQL idle client error', error.message))
 const database = new PgDatabase(pool)
 const sessions = new PostgresSessionResolver(pool)
 const matches = new ManageMatches(new PostgresMatchingGateway(database))

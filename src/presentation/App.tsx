@@ -1,14 +1,22 @@
-import { useMemo, useState } from 'react'
-import { rankMatches } from '../application/matching/rank-matches'
-import type { Intent, Match } from '../domain/model/entities'
-import type { AppData, IntentDraft } from './app.types'
-import { Dialog } from './shared/Dialog'
-import { MutualExchange, PersonSummary } from './shared/MatchSummary'
+import { useEffect, useState } from 'react'
+import type { IntentInput, ServerIntent } from '../application/intents/intent'
+import type { ServerProfile } from '../application/profiles/profile'
+import type { Intent } from '../domain/model/entities'
+import type { AppData, IntentDraft, Viewer } from './app.types'
+import { useNetwork } from './shared/network-context'
 import { storageKeys } from './shared/storage-keys'
 import { usePersistentState } from './shared/use-persistent-state'
 import ProductApp from './workspace/WorkspaceApp'
 
-type Screen = 'home' | 'create' | 'matches' | 'product'
+type Screen = 'home' | 'create' | 'product'
+type ServerState =
+  | { status: 'local' }
+  | { status: 'loading' }
+  | { status: 'error'; message: string }
+  | { status: 'ready'; userId: string; profile: ServerProfile | null; intent: ServerIntent | null }
+
+const demoViewer: Viewer = { name: 'Miraziz', subtitle: 'Builder · demo', verified: true }
+const editableStatuses: ServerIntent['status'][] = ['draft', 'active', 'paused']
 
 function parseTags(value: string) {
   return value.split(',').map((item) => item.trim()).filter(Boolean).slice(0, 8)
@@ -30,32 +38,90 @@ function Mark() {
   return <div className="mark" aria-label="Niyat"><i /><i /><i /></div>
 }
 
+/** The intent the member works on: the first one they can still act on, newest first. */
+function pickIntent(intents: ServerIntent[]) {
+  return intents.find(intent => intent.status === 'active') ?? intents.find(intent => editableStatuses.includes(intent.status)) ?? null
+}
+
 function App({ data }: { data: AppData }) {
   const { starterIntent, people, circles, initialRequests } = data
+  const network = useNetwork()
   const [screen, setScreen] = useState<Screen>('home')
-  const [draft, setDraft] = usePersistentState<IntentDraft>(storageKeys.intentDraft, starterIntent)
-  const [activeMatch, setActiveMatch] = useState<Match | null>(null)
-  const [requested, setRequested] = useState<string[]>([])
+  const [draft, setDraft] = usePersistentState<IntentDraft>(storageKeys.intentDraft, starterIntent, !network)
+  const [server, setServer] = useState<ServerState>(network ? { status: 'loading' } : { status: 'local' })
+  const [displayName, setDisplayName] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState('')
 
-  const intent: Intent = useMemo(() => ({
-    id: 'mine', ...draft, location: 'Global', mode: 'hybrid', horizon: 'quarter', visibility: 'network',
-  }), [draft])
-  const matches = useMemo(() => rankMatches(intent, people), [intent])
-  const completeness = [draft.title, draft.outcome, draft.offers.length, draft.needs.length, draft.topics.length].filter(Boolean).length * 20
+  useEffect(() => {
+    if (!network) return
+    let cancelled = false
+    // The session must exist before any authenticated read, so these calls are sequential.
+    network.connect().then(async session => ({ session, intents: await network.listIntents() })).then(({ session, intents }) => {
+      if (cancelled) return
+      const intent = pickIntent(intents)
+      if (intent) setDraft({ title: intent.title, outcome: intent.outcome, offers: intent.offers, needs: intent.needs, topics: intent.topics })
+      else setDraft({ title: '', outcome: '', offers: [], needs: [], topics: [] })
+      setServer({ status: 'ready', userId: session.userId, profile: session.profile, intent })
+    }).catch((error: unknown) => {
+      if (!cancelled) setServer({ status: 'error', message: error instanceof Error ? error.message : 'Server bilan aloqa yo‘q' })
+    })
+    return () => { cancelled = true }
+  }, [network, setDraft])
+
+  const serverIntent = server.status === 'ready' ? server.intent : null
+  const needsName = server.status === 'ready' && !server.profile
+  const intent: Intent = {
+    id: serverIntent?.id ?? 'mine', ...draft, location: 'Global',
+    mode: serverIntent?.mode ?? 'hybrid', horizon: serverIntent?.horizon ?? 'quarter', visibility: 'network',
+  }
+  const fields = [draft.title.trim(), draft.outcome.trim(), draft.offers.length, draft.needs.length, draft.topics.length, ...(needsName ? [displayName.trim()] : [])]
+  const completeness = Math.round(fields.filter(Boolean).length / fields.length * 100)
+  const viewer: Viewer = server.status === 'ready'
+    ? { name: server.profile?.displayName ?? 'Siz', subtitle: server.profile?.verificationLevel ? 'Tasdiqlangan a’zo' : 'Private alpha a’zosi', verified: Boolean(server.profile?.verificationLevel) }
+    : demoViewer
 
   function update<K extends keyof IntentDraft>(key: K, value: IntentDraft[K]) {
     setDraft((current) => ({ ...current, [key]: value }))
   }
 
-  function publish() {
-    if (completeness < 100) return
-    setScreen('product')
+  async function publish() {
+    if (completeness < 100 || saving) return
+    if (!network || server.status !== 'ready') { setScreen('product'); return }
+    setSaving(true)
+    setSaveError('')
+    try {
+      const profile = server.profile ?? await network.saveProfile({ displayName: displayName.trim(), bio: '', languages: ['uz'] })
+      const current = server.intent && editableStatuses.includes(server.intent.status) ? server.intent : null
+      const input: IntentInput = {
+        ...draft,
+        mode: current?.mode ?? 'hybrid',
+        horizon: current?.horizon ?? 'quarter',
+        // Publishing is an explicit choice to be matched, so a private draft becomes matchable.
+        visibility: current && current.visibility !== 'private' ? current.visibility : 'matched',
+        status: 'active',
+      }
+      const saved = current ? await network.updateIntent(current.id, input) : await network.createIntent(input)
+      setServer({ ...server, profile, intent: saved })
+      setScreen('product')
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : 'Niyat saqlanmadi')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  function openWorkspace() {
+    if (!network) { setDraft(starterIntent); setScreen('product'); return }
+    setScreen(serverIntent?.status === 'active' ? 'product' : 'create')
   }
 
   if (screen === 'product') {
     return (
       <ProductApp
         intent={intent}
+        server={server.status === 'ready' ? { userId: server.userId, intentId: serverIntent?.id } : undefined}
+        viewer={viewer}
         data={{ people, circles, initialRequests }}
         onEdit={() => setScreen('create')}
         onExit={() => setScreen('home')}
@@ -67,9 +133,12 @@ function App({ data }: { data: AppData }) {
     <main>
       <nav>
         <button className="brand" onClick={() => setScreen('home')}><Mark /><b>niyat</b><em>beta</em></button>
-        <div className="nav-center"><span className="live-dot" /> 148 niyat hozir faol</div>
-        <button className="avatar" onClick={() => setScreen('create')}>M</button>
+        <div className="nav-center"><span className="live-dot" /> {network ? 'Private alpha' : 'Local demo'}</div>
+        <button aria-label="Niyatni tahrirlash" className="avatar" onClick={() => setScreen('create')}>{viewer.name[0]?.toUpperCase()}</button>
       </nav>
+
+      {server.status === 'loading' && <div className="api-status" role="status">Server ma’lumotlari yuklanmoqda…</div>}
+      {server.status === 'error' && <div className="api-status error" role="alert">Server bilan ulanib bo‘lmadi: {server.message}</div>}
 
       {screen === 'home' && (
         <section className="home">
@@ -78,7 +147,9 @@ function App({ data }: { data: AppData }) {
           <p className="lead">Niyatingni ayt. Biz sen bera oladigan va olishing kerak bo‘lgan narsalar kesishgan insonlarni topamiz.</p>
           <div className="hero-actions">
             <button className="primary" onClick={() => setScreen('create')}>Niyat yaratish <span>↗</span></button>
-            <button className="text-button" onClick={() => { setDraft(starterIntent); setScreen('product') }}>Jonli demoni ko‘rish <span>→</span></button>
+            <button className="text-button" disabled={server.status === 'loading'} onClick={openWorkspace}>
+              {network ? 'Workspace’ni ochish' : 'Jonli demoni ko‘rish'} <span>→</span>
+            </button>
           </div>
           <div className="constellation" aria-hidden="true">
             <div className="orbit orbit-a" /><div className="orbit orbit-b" />
@@ -102,14 +173,18 @@ function App({ data }: { data: AppData }) {
             <div className="completion"><b>{completeness}%</b><span>ANIQLIK</span><div><i style={{ width: `${completeness}%` }} /></div></div>
           </header>
           <div className="builder">
-            <div className="form-card">
+            <form className="form-card" onSubmit={(event) => { event.preventDefault(); void publish() }}>
+              {needsName && <Field label="Ismingiz" hint="Faqat rozilikdan keyin ko‘rinadi" value={displayName} onChange={setDisplayName} placeholder="Masalan: Aziza Karimova" />}
               <Field label="Nima qurmoqchisan?" hint="Bir jumlada" value={draft.title} onChange={(v) => update('title', v)} placeholder="Masalan: yangi avlod ta’lim platformasi" />
               <Field area label="Qanday natija ko‘rmoqchisan?" hint="O‘lchash mumkin bo‘lsin" value={draft.outcome} onChange={(v) => update('outcome', v)} placeholder="90 kun ichida..." />
               <Field label="Sen nima bera olasan?" hint="Vergul bilan ajrat" value={draft.offers.join(', ')} onChange={(v) => update('offers', parseTags(v))} placeholder="engineering, auditoriya, tajriba" />
               <Field label="Senga nima kerak?" hint="Halol va konkret bo‘l" value={draft.needs.join(', ')} onChange={(v) => update('needs', parseTags(v))} placeholder="design, distribution, capital" />
               <Field label="Asosiy mavzular" hint="Ko‘pi bilan 8 ta" value={draft.topics.join(', ')} onChange={(v) => update('topics', parseTags(v))} placeholder="AI, climate, education" />
-              <button className="primary publish" disabled={completeness < 100} onClick={publish}>Niyatni tarmoqqa chiqarish <span>→</span></button>
-            </div>
+              {saveError && <p className="form-error" role="alert">{saveError}</p>}
+              <button className="primary publish" disabled={completeness < 100 || saving || server.status === 'loading'}>
+                {saving ? 'Saqlanmoqda…' : serverIntent?.status === 'active' ? 'Niyatni yangilash' : 'Niyatni tarmoqqa chiqarish'} <span>→</span>
+              </button>
+            </form>
             <aside className="preview">
               <span className="kicker">LIVE CAPSULE</span>
               <div className="capsule-glow" />
@@ -117,46 +192,10 @@ function App({ data }: { data: AppData }) {
               <p>{draft.outcome || 'Aniq natijani yozsang, tarmoq kerakli kesishmalarni topadi.'}</p>
               <TagGroup title="BERAMAN" tags={draft.offers} empty="Qobiliyatlaring" />
               <TagGroup title="KERAK" tags={draft.needs} empty="Ehtiyojlaring" warm />
-              <div className="privacy"><span>◉</span><div><b>Consent-first</b><small>Kontakt ma’lumoting faqat ikki tomon roziligidan keyin ochiladi.</small></div></div>
+              <div className="privacy"><span>◉</span><div><b>Consent-first</b><small>Ismingiz va kontaktingiz faqat ikki tomon roziligidan keyin ochiladi.</small></div></div>
             </aside>
           </div>
         </section>
-      )}
-
-      {screen === 'matches' && (
-        <section className="workspace matches-page">
-          <header className="section-head">
-            <div><span className="kicker">MUTUAL COLLISIONS</span><h2>{matches.filter(m => m.score > 50).length} ta kuchli kesishma.</h2><p>Bu odamlar faqat senga kerak emas — sen ham ularga keraksan.</p></div>
-            <div className="header-actions"><button className="outline" onClick={() => setScreen('create')}>Niyatni tahrirlash</button><button className="primary" onClick={() => setScreen('product')}>Workspace →</button></div>
-          </header>
-          <div className="match-grid">
-            {matches.map((match, index) => (
-              <button className="match-card" key={match.person.id} onClick={() => setActiveMatch(match)}>
-                <div className="match-top"><span className="rank">0{index + 1}</span><div className="score"><b>{match.score}</b><small>MATCH</small></div></div>
-                <PersonSummary person={match.person} />
-                <h4>{match.person.intent.title}</h4>
-                <MutualExchange match={match} />
-                <span className="view">Kesishmani ochish ↗</span>
-              </button>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {activeMatch && (
-        <Dialog label={`${activeMatch.person.name} bilan moslik`} onClose={() => setActiveMatch(null)}>
-            <button aria-label="Dialogni yopish" className="close" onClick={() => setActiveMatch(null)}>×</button>
-            <span className="kicker">MUTUAL VALUE · {activeMatch.score}%</span>
-            <PersonSummary person={activeMatch.person} large />
-            <div className="reason-list">{activeMatch.reasons.map(r => <span key={r}>✓ {r}</span>)}</div>
-            <div className="message"><span>TAKLIF ETILGAN KIRISH</span><p>{activeMatch.opening}</p></div>
-            {requested.includes(activeMatch.person.id) ? (
-              <div className="sent">✓ So‘rov yuborildi. Qarshi tomon rozilik bersa, aloqa ochiladi.</div>
-            ) : (
-              <button className="primary full" onClick={() => setRequested([...requested, activeMatch.person.id])}>Rozilik bilan intro so‘rash <span>→</span></button>
-            )}
-            <small className="consent-note">Bu amal kontaktni darhol ochmaydi. Ikki tomon ham rozilik berishi kerak.</small>
-        </Dialog>
       )}
     </main>
   )

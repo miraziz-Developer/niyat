@@ -13,6 +13,8 @@ function fakePool(stored: { fingerprint: string; response: unknown } | null = nu
       return { rows: [], rowCount: 1 }
     }),
     release: vi.fn(),
+    on: vi.fn(),
+    off: vi.fn(),
   }
   const pool = { connect: vi.fn(async () => client) } as unknown as Pool
   return { pool, client, statements }

@@ -10,7 +10,9 @@ try {
     INSERT INTO users (id, status, locale, timezone, is_adult_confirmed) VALUES
       ('00000000-0000-4000-8000-000000000001', 'active', 'uz', 'Asia/Tashkent', true),
       ('00000000-0000-4000-8000-000000000002', 'active', 'uz', 'Asia/Tashkent', true),
-      ('00000000-0000-4000-8000-000000000003', 'active', 'uz', 'Asia/Tashkent', true)
+      ('00000000-0000-4000-8000-000000000003', 'active', 'uz', 'Asia/Tashkent', true),
+      -- Deliberately without a profile: exercises first-run onboarding in the browser.
+      ('00000000-0000-4000-8000-000000000004', 'active', 'uz', 'Asia/Tashkent', true)
     ON CONFLICT (id) DO NOTHING;
 
     INSERT INTO profiles (user_id, display_name, bio, city_precision, languages, verification_level) VALUES

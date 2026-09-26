@@ -38,7 +38,7 @@ for (const marker of ['SECURITY DEFINER', 'SET search_path = pg_catalog, public,
 for (const marker of ['ENABLE ROW LEVEL SECURITY', 'collaboration_outcome_transition_guard', 'milestone_completion_guard', 'outcome_verification_request_guard', 'outcome_verification_resolution_guard', 'only a distinct counterparty may resolve verification', 'outcome_one_pending_per_collaboration_idx', 'trust_distinct_participants']) {
   if (!outcomeMigration.includes(marker)) failures.push(`Outcome migration safety marker missing: ${marker}`)
 }
-for (const marker of ['ALTER TABLE matches ENABLE ROW LEVEL SECURITY', 'matches_participant_all', 'SECURITY DEFINER', 'SET search_path = pg_catalog, public, pg_temp', "visibility <> 'private'", 'public.blocks', 'REVOKE ALL ON FUNCTION matchable_intents', 'REVOKE ALL ON FUNCTION match_counterpart', "intro_requests.status = 'accepted'"]) {
+for (const marker of ['ALTER TABLE matches ENABLE ROW LEVEL SECURITY', 'matches_participant_all', 'SECURITY DEFINER', 'SET search_path = pg_catalog, public, pg_temp', "visibility <> 'private'", 'public.blocks', 'REVOKE ALL ON FUNCTION matchable_intents', 'REVOKE ALL ON FUNCTION match_counterpart', "intro_requests.status = 'accepted'", 'audit_events_no_truncate']) {
   if (!matchingMigration.includes(marker)) failures.push(`Matching migration safety marker missing: ${marker}`)
 }
 

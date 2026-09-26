@@ -6,22 +6,23 @@ Kod feature-oriented Clean Architecture/DDD chegaralarida tashkil qilingan.
 src/
 ├── domain/
 │   ├── model/          # Entity va domain turlari
-│   └── matching/       # Frameworksiz sof matching qoidalari
+│   └── matching/       # Frameworksiz sof, simmetrik reciprocal scoring
 ├── application/
-│   ├── matching/       # Matching use-case orchestration
+│   ├── matching/       # Demo ranking va server matching porti
 │   ├── collaborations/ # Accepted intro va milestone lifecycle
 │   ├── outcomes/       # Verification va trust-signal invariantlari
 │   ├── profiles/       # Profile o‘qish/yangilash use-case'i
 │   ├── intents/        # Intent CRUD va status lifecycle qoidalari
+│   ├── safety/         # Block va shikoyat use-case'lari
 │   ├── ports/          # Repository, service va state-store kontraktlari
 │   └── requests/       # Intro request lifecycle use-case'lari
 ├── infrastructure/
 │   ├── demo/           # Vaqtinchalik in-memory ma'lumot adapteri
 │   ├── persistence/    # Browser storage adapteri
-│   ├── http/           # Browser API adapteri
+│   ├── http/           # Browser API klienti (NetworkClient implementatsiyasi)
 │   └── server/         # Node HTTP, session, idempotency va PostgreSQL adapterlari
 └── presentation/
-    ├── shared/         # Reusable React hook'lar
+    ├── shared/         # Reusable hook'lar, persistence va network context
     ├── workspace/      # Workspace UI va uning komponentlari
     └── styles/         # Global design system
 ```
@@ -44,13 +45,17 @@ Dependency ichkariga qaraydi:
 
 ## Hozirgi chegara
 
-Bu Gate 1 local-first prototype va Gate 2 runnable server vertical slice. Default rejim `infrastructure/demo` va browser storage’dan foydalanadi. `VITE_API_MODE=server` intro/collaboration/outcome read-modelini serverdan hydrate qiladi va outcome mutationlarini authenticated API orqali bajaradi. Profile va intent CRUD server API’da mavjud, lekin UI hali ularni server adapteri orqali ishlatmaydi; matching va notification oqimlari server tomonda hali yo‘q. PostgreSQL migration `db/migrations`, versionlangan API contract `contracts`, delivery holati esa [`GATE_2_CHECKLIST.md`](./GATE_2_CHECKLIST.md) da.
+Default rejim `infrastructure/demo` va browser storage’dan foydalanadi. `VITE_API_MODE=server` bo‘lsa `main.tsx` composition root’i `NiyatApi`ni `NetworkProvider` orqali beradi; presentation faqat `application/ports/network-client.ts` portiga tayanadi va fetch yoki infrastructure’ni bevosita chaqirmaydi. Server rejimida workspace har mutatsiyadan keyin server read-model’ini qayta o‘qiydi, shuning uchun UI holatni taxmin qilmaydi. PostgreSQL migration `db/migrations`, versionlangan API contract `contracts`, delivery holati esa [`GATE_2_CHECKLIST.md`](./GATE_2_CHECKLIST.md) da.
 
 ## Server authorization boundary
 
 HTTP handler actorni server session’dan oladi, inputni OpenAPI schema bilan tekshiradi va actor ID’ni use-case/repository’ga explicit uzatadi. PostgreSQL transaction boshida `SET LOCAL app.user_id = ...` o‘rnatilib RLS defense-in-depth sifatida ishlaydi. RLS application policy o‘rnini bosmaydi. AI natijasi authorization inputi emas.
 
-Intro request va collaboration/outcome vertical slice’lari Web `Request`/`Response`, `SessionResolver`, `IdempotencyStore` va `SqlDatabase` portlariga tayanadi. `server/index.ts` Node HTTP, `pg`, PostgreSQL session va durable idempotency adapterlarini composition qiladi. Outcome gateway accepted intro → milestones → evidence → counterparty-only decision → deduplicated trust signal zanjirini bajaradi. Local bootstrap session faqat non-production `AUTH_MODE=local`da ochiladi; production tashqi identity provider talab qiladi. Idempotency record restartdan keyin replay qilinadi, ammo business transaction va response record orasidagi process-crash window atomik Unit of Work qo‘shilmaguncha qoladi. Database runtime role internetdan bevosita ochilmaydi va faqat zarur grantlarni olishi kerak.
+HTTP qatlami bitta `endpoint` helper (session, CSRF, `Idempotency-Key`, UUID path param) va deklarativ resurs jadvali (`http/resources.ts`) atrofida qurilgan; har bir contract path shu jadvalda. Handlerlar Web `Request`/`Response`, `SessionResolver`, `IdempotencyStore` va `SqlDatabase` portlariga tayanadi. `server/index.ts` Node HTTP, `pg`, PostgreSQL session va durable idempotency adapterlarini composition qiladi. Outcome gateway accepted intro → milestones → evidence → counterparty-only decision → deduplicated trust signal zanjirini bajaradi. Local bootstrap session faqat non-production `AUTH_MODE=local`da ochiladi; production tashqi identity provider talab qiladi. `PgDatabase` ichki `transaction` chaqiruvlarini mavjud (ambient) tranzaksiyaga qo‘shadi; shu Unit of Work tufayli idempotency record biznes o‘zgarishi bilan bir tranzaksiyada commit qilinadi va restartdan keyin replay qilinadi. Database runtime role internetdan bevosita ochilmaydi va faqat zarur grantlarni olishi kerak.
+
+## Matching va maxfiylik
+
+`domain/matching/score-intents.ts` simmetrik skor beradi: juftlik bir marta canonical tartibda (`left_intent_id < right_intent_id`) saqlanadi va har tomon uchun alohida tushuntiriladi. Niyat yaratilganda yoki yangilanganda `ManageIntents` match’larni qayta hisoblaydi; faol bo‘lmagan yoki maxfiy niyatning intro tarixi yo‘q match’lari olib tashlanadi. Boshqa foydalanuvchi niyatini o‘qish faqat `SECURITY DEFINER` funksiyalar orqali bo‘ladi (`matchable_intents`, `match_counterpart`): ular block’larni hisobga oladi va `display_name`ni faqat qabul qilingan intro’dan keyin qaytaradi. `matches` jadvalida RLS yoqilgan.
 
 ## Self-hosted runtime
 

@@ -6,4 +6,6 @@ export const storageKeys = {
   collaborations: 'niyat-collaborations',
   outcomeVerifications: 'niyat-outcome-verifications',
   trustSignals: 'niyat-trust-signals',
+  hiddenPeople: 'niyat-hidden-people',
+  privacySettings: 'niyat-privacy-settings',
 } as const

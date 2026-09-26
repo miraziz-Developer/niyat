@@ -28,6 +28,10 @@ export type Match = {
   youReceive: string[]
   theyReceive: string[]
   opening: string
+  /** Server-backed matches only: the match resource, its limitations, and any intro already on it. */
+  matchId?: string
+  limitations?: string[]
+  introId?: string
 }
 
 export type IntroRequest = {
@@ -76,6 +80,8 @@ export type OutcomeVerification = {
   status: 'pending' | 'confirmed' | 'disputed'
   requestedAt: string
   resolvedAt?: string
+  /** True when the current viewer is the counterparty who must confirm or dispute. */
+  awaitingMyDecision?: boolean
 }
 
 export type TrustSignal = {

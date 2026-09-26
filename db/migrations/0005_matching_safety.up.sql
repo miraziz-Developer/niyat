@@ -103,4 +103,8 @@ AS $$
 $$;
 REVOKE ALL ON FUNCTION match_counterpart(uuid) FROM PUBLIC;
 
+-- The row-level trigger from 0001 does not fire on TRUNCATE; audit history stays append-only.
+CREATE TRIGGER audit_events_no_truncate BEFORE TRUNCATE ON audit_events
+FOR EACH STATEMENT EXECUTE FUNCTION reject_audit_mutation();
+
 COMMIT;

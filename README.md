@@ -85,7 +85,14 @@ Seed qilingan database’ga qarshi ishlab turgan API’ni end-to-end tekshirish 
 
 ```bash
 npm run smoke:api       # collaboration → outcome verification → trust signal
-npm run smoke:intents   # profile upsert va intent CRUD/authorization
+npm run smoke:network   # profile, intent CRUD, matching, consent, block va report
+```
+
+Ikkala smoke ham yangi seed qilingan database kutadi. Server rejimidagi to‘liq brauzer oqimi (onboarding → anonim match → intro → rozilik → hamkorlik → hamkor tasdig‘i) uchun API va server-mode frontend ishlab turganda:
+
+```bash
+VITE_API_MODE=server VITE_DEV_USER_ID=00000000-0000-4000-8000-000000000004 npx vite --port 4174
+NIYAT_E2E_APP=http://127.0.0.1:4174 npm run test:e2e
 ```
 
 Production’da `AUTH_MODE=local` qat’iy rad etiladi; OAuth/passkey/magic-link provider session yaratish oqimiga ulanishi shart. API va browser dev serverlari birga ishlaganda Vite `/v1` so‘rovlarini `127.0.0.1:3000` ga proxy qiladi. Docker stack’da Nginx shu proxy vazifasini bajaradi.
@@ -115,9 +122,12 @@ Foydalanuvchi “nima bera olaman / menga nima kerak” formatida niyat yaratadi
 - Server adapterlari uchun repository/service ports va DB authorization baseline
 - Collaboration/outcome uchun OpenAPI endpointlari, PostgreSQL persistence, transaction gateway va authenticated HTTP handlerlar
 - Node HTTP router/composition root, `pg` pool, DB migration runner, rotating opaque session va PostgreSQL idempotency store
-- Server read-model hydration va outcome mutationlariga ulangan opt-in browser adapter (`VITE_API_MODE=server`)
-- Profile (`/v1/me/profile`) va intent CRUD (`/v1/intents`) server slice’i: owner-only kirish, keyset pagination, lifecycle transition qoidalari, idempotent mutationlar va intro tarixi bor niyatni o‘chirishdan himoya
-- Chromium responsive E2E va axe accessibility smoke testlari
+- To‘liq server rejimi (`VITE_API_MODE=server`): onboarding, niyatni e’lon qilish, server match’lari, intro yuborish/qabul qilish, hamkorlik, milestone, hamkor tasdig‘i, block va shikoyat
+- Profile va intent CRUD: owner-only kirish, keyset pagination, lifecycle qoidalari va intro tarixi bor niyatni o‘chirishdan himoya
+- Server-side reciprocal matching: har tomon uchun alohida tushuntirish va cheklovlar; ism faqat intro qabul qilingach ochiladi; maxfiy niyatlar match bo‘lmaydi
+- Block (kutilayotgan intro’larni yopadi va juftlikni yashiradi) va audit qilinadigan, kunlik limitli shikoyat navbati
+- Idempotency record biznes o‘zgarishi bilan bitta tranzaksiyada commit qilinadi
+- Chromium responsive E2E, server-mode brauzer oqimi va axe accessibility testlari
 
 ## Keyingi validatsiya
 
@@ -128,6 +138,6 @@ Bu hali production ijtimoiy tarmoq emas. Backend qurishdan oldin 30–50 foydala
 3. Ikki tomonlama acceptance
 4. 7 kun ichida yangi niyat bilan qaytish
 
-Default UI local-first demo bo‘lib qoladi. `VITE_API_MODE=server` rejimida intro read-model, collaboration, milestone, verification va trust signal oqimi serverdan hydrate qilinadi; requester o‘z natijasini tasdiqlay olmaydi. Local demo’dagi counterparty tugmasi faqat prototip simulyatsiyasidir.
+Default UI local-first demo bo‘lib qoladi. `VITE_API_MODE=server` rejimida butun workspace serverdan ishlaydi va brauzer storage’iga server ma’lumoti yozilmaydi; requester o‘z natijasini tasdiqlay olmaydi, qarorni faqat hamkor o‘z sessiyasidan beradi. Local demo’dagi counterparty tugmasi faqat prototip simulyatsiyasidir. Circles hozircha faqat demo’da.
 
-Keyingi bosqich: production auth provider, profile/intent UI adapteri va server-side matching, notification/moderation delivery, analytics va deployment observability. PostgreSQL idempotency restartdan keyingi replayni saqlaydi; mutatsiya commit’i bilan idempotency record yozuvi orasidagi crash window’ni to‘liq yopish uchun keyinchalik bitta transaction/UoW kerak. DID/blockchain MVP uchun ataylab qo‘shilmadi.
+Keyingi bosqich: production auth provider, Docker’da alohida non-owner database roli (hozir API jadval egasi sifatida ulanadi va RLS chetlab o‘tiladi), matching uchun background worker, notification va moderator vositalari, analytics va deployment observability. DID/blockchain MVP uchun ataylab qo‘shilmadi.

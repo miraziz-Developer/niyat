@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
 import { useStateStore } from './persistence-context'
 
-export function usePersistentState<T>(key: string, fallback: T) {
+/** Browser-persisted state. With `persist` false it behaves like useState, so server data never leaks into local storage. */
+export function usePersistentState<T>(key: string, fallback: T, persist = true) {
   const store = useStateStore()
-  const [value, setValue] = useState<T>(() => store.read(key, fallback))
+  const [value, setValue] = useState<T>(() => persist ? store.read(key, fallback) : fallback)
 
-  useEffect(() => store.write(key, value), [key, store, value])
+  useEffect(() => { if (persist) store.write(key, value) }, [key, persist, store, value])
 
   return [value, setValue] as const
 }

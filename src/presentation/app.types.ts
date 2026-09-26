@@ -8,3 +8,8 @@ export type AppData = {
   circles: Circle[]
   initialRequests: IntroRequest[]
 }
+export type Viewer = {
+  name: string
+  subtitle: string
+  verified: boolean
+}
