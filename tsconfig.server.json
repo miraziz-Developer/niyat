@@ -8,6 +8,6 @@
     "noEmit": true,
     "types": ["node"]
   },
-  "include": ["server", "scripts/migrate.ts", "scripts/seed-private-alpha.ts", "src/application/intros/intro-request.ts", "src/application/outcomes/server-outcome-verification.ts", "src/infrastructure/server/**/*.ts"],
+  "include": ["server", "scripts/migrate.ts", "scripts/seed-private-alpha.ts", "src/application/intros/intro-request.ts", "src/application/outcomes/server-outcome-verification.ts", "src/application/profiles/profile.ts", "src/application/intents/intent.ts", "src/infrastructure/server/**/*.ts"],
   "exclude": ["**/*.test.ts"]
 }

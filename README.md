@@ -81,6 +81,13 @@ curl -c cookies.txt -X POST \
   http://127.0.0.1:3000/v1/dev/session
 ```
 
+Seed qilingan database’ga qarshi ishlab turgan API’ni end-to-end tekshirish (`API_URL` default: `http://127.0.0.1:3000/v1`):
+
+```bash
+npm run smoke:api       # collaboration → outcome verification → trust signal
+npm run smoke:intents   # profile upsert va intent CRUD/authorization
+```
+
 Production’da `AUTH_MODE=local` qat’iy rad etiladi; OAuth/passkey/magic-link provider session yaratish oqimiga ulanishi shart. API va browser dev serverlari birga ishlaganda Vite `/v1` so‘rovlarini `127.0.0.1:3000` ga proxy qiladi. Docker stack’da Nginx shu proxy vazifasini bajaradi.
 
 ## Secretlar
@@ -109,6 +116,7 @@ Foydalanuvchi “nima bera olaman / menga nima kerak” formatida niyat yaratadi
 - Collaboration/outcome uchun OpenAPI endpointlari, PostgreSQL persistence, transaction gateway va authenticated HTTP handlerlar
 - Node HTTP router/composition root, `pg` pool, DB migration runner, rotating opaque session va PostgreSQL idempotency store
 - Server read-model hydration va outcome mutationlariga ulangan opt-in browser adapter (`VITE_API_MODE=server`)
+- Profile (`/v1/me/profile`) va intent CRUD (`/v1/intents`) server slice’i: owner-only kirish, keyset pagination, lifecycle transition qoidalari, idempotent mutationlar va intro tarixi bor niyatni o‘chirishdan himoya
 - Chromium responsive E2E va axe accessibility smoke testlari
 
 ## Keyingi validatsiya
@@ -122,4 +130,4 @@ Bu hali production ijtimoiy tarmoq emas. Backend qurishdan oldin 30–50 foydala
 
 Default UI local-first demo bo‘lib qoladi. `VITE_API_MODE=server` rejimida intro read-model, collaboration, milestone, verification va trust signal oqimi serverdan hydrate qilinadi; requester o‘z natijasini tasdiqlay olmaydi. Local demo’dagi counterparty tugmasi faqat prototip simulyatsiyasidir.
 
-Keyingi bosqich: production auth provider, profile/intent/match UI adapterlari, notification/moderation delivery, analytics va deployment observability. PostgreSQL idempotency restartdan keyingi replayni saqlaydi; mutatsiya commit’i bilan idempotency record yozuvi orasidagi crash window’ni to‘liq yopish uchun keyinchalik bitta transaction/UoW kerak. DID/blockchain MVP uchun ataylab qo‘shilmadi.
+Keyingi bosqich: production auth provider, profile/intent UI adapteri va server-side matching, notification/moderation delivery, analytics va deployment observability. PostgreSQL idempotency restartdan keyingi replayni saqlaydi; mutatsiya commit’i bilan idempotency record yozuvi orasidagi crash window’ni to‘liq yopish uchun keyinchalik bitta transaction/UoW kerak. DID/blockchain MVP uchun ataylab qo‘shilmadi.

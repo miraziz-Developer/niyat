@@ -11,6 +11,8 @@ src/
 │   ├── matching/       # Matching use-case orchestration
 │   ├── collaborations/ # Accepted intro va milestone lifecycle
 │   ├── outcomes/       # Verification va trust-signal invariantlari
+│   ├── profiles/       # Profile o‘qish/yangilash use-case'i
+│   ├── intents/        # Intent CRUD va status lifecycle qoidalari
 │   ├── ports/          # Repository, service va state-store kontraktlari
 │   └── requests/       # Intro request lifecycle use-case'lari
 ├── infrastructure/
@@ -42,7 +44,7 @@ Dependency ichkariga qaraydi:
 
 ## Hozirgi chegara
 
-Bu Gate 1 local-first prototype va Gate 2 runnable server vertical slice. Default rejim `infrastructure/demo` va browser storage’dan foydalanadi. `VITE_API_MODE=server` intro/collaboration/outcome read-modelini serverdan hydrate qiladi va outcome mutationlarini authenticated API orqali bajaradi. Profile, intent, matching va notification UI oqimlari hali server adapteriga ko‘chirilmagan. PostgreSQL migration `db/migrations`, versionlangan API contract `contracts`, delivery holati esa [`GATE_2_CHECKLIST.md`](./GATE_2_CHECKLIST.md) da.
+Bu Gate 1 local-first prototype va Gate 2 runnable server vertical slice. Default rejim `infrastructure/demo` va browser storage’dan foydalanadi. `VITE_API_MODE=server` intro/collaboration/outcome read-modelini serverdan hydrate qiladi va outcome mutationlarini authenticated API orqali bajaradi. Profile va intent CRUD server API’da mavjud, lekin UI hali ularni server adapteri orqali ishlatmaydi; matching va notification oqimlari server tomonda hali yo‘q. PostgreSQL migration `db/migrations`, versionlangan API contract `contracts`, delivery holati esa [`GATE_2_CHECKLIST.md`](./GATE_2_CHECKLIST.md) da.
 
 ## Server authorization boundary
 

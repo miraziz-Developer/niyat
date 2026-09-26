@@ -1,14 +1,18 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { Readable } from 'node:stream'
 import pg from 'pg'
+import { ManageIntents } from '../src/application/intents/intent'
 import { ManageIntroRequests } from '../src/application/intros/intro-request'
 import { ManageOutcomeVerifications } from '../src/application/outcomes/server-outcome-verification'
+import { ManageProfiles } from '../src/application/profiles/profile'
 import { createApiRouter } from '../src/infrastructure/server/http/router'
 import { HttpError, requireCsrf, requireSession } from '../src/infrastructure/server/http/security'
 import { PgDatabase } from '../src/infrastructure/server/postgres/pg-database'
 import { PostgresIdempotencyStore } from '../src/infrastructure/server/postgres/postgres-idempotency-store'
+import { PostgresIntentGateway } from '../src/infrastructure/server/postgres/postgres-intent-gateway'
 import { PostgresIntroRequestGateway } from '../src/infrastructure/server/postgres/postgres-intro-request-gateway'
 import { PostgresOutcomeVerificationGateway } from '../src/infrastructure/server/postgres/postgres-outcome-verification-gateway'
+import { PostgresProfileGateway } from '../src/infrastructure/server/postgres/postgres-profile-gateway'
 import { PostgresSessionResolver } from '../src/infrastructure/server/postgres/postgres-session-resolver'
 
 const databaseUrl = process.env.DATABASE_URL
@@ -22,7 +26,14 @@ const pool = new pg.Pool({ connectionString: databaseUrl, max: poolSize })
 const database = new PgDatabase(pool)
 const sessions = new PostgresSessionResolver(pool)
 const outcomes = new ManageOutcomeVerifications(new PostgresOutcomeVerificationGateway(database))
-const router = createApiRouter({ sessions, idempotency: new PostgresIdempotencyStore(pool), intros: new ManageIntroRequests(new PostgresIntroRequestGateway(database)), outcomes })
+const router = createApiRouter({
+  sessions,
+  idempotency: new PostgresIdempotencyStore(pool),
+  intros: new ManageIntroRequests(new PostgresIntroRequestGateway(database)),
+  outcomes,
+  profiles: new ManageProfiles(new PostgresProfileGateway(database)),
+  intents: new ManageIntents(new PostgresIntentGateway(database)),
+})
 const port = Number(process.env.PORT ?? 3000)
 const host = process.env.HOST ?? '127.0.0.1'
 
