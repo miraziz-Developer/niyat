@@ -20,8 +20,10 @@ services:
       start_period: 5s
     stop_grace_period: 30s
 
+  # One-off jobs: never started by a plain `docker compose up`, only when named (`docker compose run --rm migrate …`).
   migrate:
     image: niyat-api:local
+    profiles: ["tools"]
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-niyat}:${POSTGRES_PASSWORD:-niyat_local_only}@postgres:5432/${POSTGRES_DB:-niyat}
       NIYAT_APP_DB_USER: ${NIYAT_APP_DB_USER:-niyat_app}
@@ -35,6 +37,7 @@ services:
 
   seed:
     image: niyat-api:local
+    profiles: ["tools"]
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-niyat}:${POSTGRES_PASSWORD:-niyat_local_only}@postgres:5432/${POSTGRES_DB:-niyat}
     command: ["npm", "run", "db:seed:private-alpha"]
@@ -84,7 +87,25 @@ services:
         VITE_CONTACT_EMAIL: ${VITE_CONTACT_EMAIL:-}
     restart: unless-stopped
     ports:
-      - "${NIYAT_HTTP_PORT:-8080}:80"
+      # With a domain (profile "https") this is bound to 127.0.0.1 and only Caddy is public.
+      - "${NIYAT_HTTP_BIND:-0.0.0.0}:${NIYAT_HTTP_PORT:-8080}:80"
     depends_on:
       api:
         condition: service_healthy
+
+  caddy:
+    image: caddy:2-alpine
+    profiles: ["https"]
+    restart: unless-stopped
+    environment:
+      NIYAT_DOMAIN: ${NIYAT_DOMAIN:-}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./.local/caddy/data:/data
+      - ./.local/caddy/config:/config
+    depends_on:
+      - web

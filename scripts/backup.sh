@@ -8,7 +8,8 @@ set -eu
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$ROOT"
 DIR=${NIYAT_BACKUP_DIR:-.local/backups}
-KEEP=${NIYAT_BACKUP_KEEP:-14}
+KEEP=${NIYAT_BACKUP_KEEP:-$(sed -n 's/^NIYAT_BACKUP_KEEP=//p' .env 2>/dev/null | tail -n 1)}
+KEEP=${KEEP:-14}
 mkdir -p "$DIR"
 chmod 700 "$DIR"
 FILE="$DIR/niyat-$(date -u +%Y%m%dT%H%M%SZ).dump"

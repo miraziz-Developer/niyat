@@ -1,0 +1,10 @@
+# Public HTTPS entry point (compose profile "https"). Caddy obtains and renews the
+# Let's Encrypt certificate for NIYAT_DOMAIN automatically and redirects HTTP to HTTPS.
+{$NIYAT_DOMAIN} {
+	encode gzip
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		-Server
+	}
+	reverse_proxy web:80
+}

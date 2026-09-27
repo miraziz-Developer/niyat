@@ -14,29 +14,29 @@ Gate 2 holati va ochiq launch talablari: [`docs/GATE_2_CHECKLIST.md`](./docs/GAT
 
 ### Serverda bitta script bilan
 
-Talab: Linux serverda Git, Docker Engine va Docker Compose plugin o‘rnatilgan bo‘lishi kerak.
+To‘liq qo‘llanma, `.env` o‘zgaruvchilari jadvali, backup, yangilash va muammolar: **[DEPLOY.md](DEPLOY.md)**.
 
 ```bash
-git clone https://github.com/miraziz-Developer/niyat.git
-cd niyat
-./scripts/server-up.sh
+git clone https://github.com/miraziz-Developer/niyat.git /srv/niyat
+cd /srv/niyat
+./scripts/server-up.sh --domain niyat.uz --email siz@gmail.com --resend-key re_xxx
 ```
 
-Script `.env` uchun kuchli tasodifiy PostgreSQL paroli yaratadi, Docker image’larni build qiladi, PostgreSQL migration va private-alpha seed’ni bajaradi, keyin Nginx frontend hamda Node API’ni ishga tushiradi.
+Script kerak bo‘lsa Docker’ni o‘rnatadi, `.env` ni kuchli tasodifiy parollar bilan yaratadi, image’larni build qiladi, migratsiyalarni bajaradi, API, Nginx frontend va Caddy (avtomatik Let’s Encrypt HTTPS) ni ishga tushiradi, adminni taklif qiladi, kunlik backup cron’ini qo‘shadi va `/v1/ready` ni tekshiradi. Yangilash: `git pull && ./scripts/server-up.sh`.
 
-Default manzil: `http://SERVER_IP:8080`. Portni `.env` ichidagi `NIYAT_HTTP_PORT` bilan o‘zgartirish mumkin.
+Parametrsiz `./scripts/server-up.sh` sinov rejimini ishga tushiradi: `http://SERVER_IP:8080`, demo foydalanuvchi bilan.
 
 ```bash
 docker compose ps
-docker compose logs -f api web postgres
+docker compose logs -f api web caddy
 docker compose down
 ```
 
 Migration jadval egasi sifatida bajariladi, API esa alohida `niyat_app` roli bilan ulanadi: u RLS’ni chetlab o‘tmaydi, DDL qila olmaydi va audit jurnaliga faqat yozadi. `server-up.sh` bu rol parolini ham `.env` ga avtomatik qo‘shadi (eski o‘rnatishlarda ham). Production’da API RLS’ni chetlab o‘tadigan rol bilan ishga tushishni rad etadi.
 
-PostgreSQL internetga ochilmaydi; u faqat `127.0.0.1:55432` va ichki Docker network’da mavjud. Persistent data `.local/postgres/` ichida qoladi. Server backup’i `pg_dump` bilan olinishi kerak.
+PostgreSQL internetga ochilmaydi; u faqat `127.0.0.1:55432` va ichki Docker network’da mavjud. Persistent data `.local/postgres/` ichida qoladi. Backup: `./scripts/backup.sh` (domen rejimida har kuni avtomatik).
 
-> **Xavfsizlik:** default `AUTH_MODE=local` brauzerni avtomatik demo foydalanuvchi sifatida kiritadi — bu faqat yopiq sinov uchun. Serverni internetga ochishdan oldin quyidagi taklif asosidagi email kirishni yoqing. `NODE_ENV=production` bilan local auth server tomonidan rad etiladi.
+> **Xavfsizlik:** default `AUTH_MODE=local` brauzerni avtomatik demo foydalanuvchi sifatida kiritadi — bu faqat yopiq sinov uchun. Internetga ochishdan oldin `--domain` bilan ishga tushiring — u taklif asosidagi email kirishni yoqadi. `NODE_ENV=production` bilan local auth server tomonidan rad etiladi.
 
 ### Taklif asosidagi email kirish (magic link)
 
