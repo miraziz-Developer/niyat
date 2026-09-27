@@ -1,6 +1,9 @@
+import type { ManageConsents } from '../../../application/consent/consent'
 import type { IntentInput, ManageIntents } from '../../../application/intents/intent'
 import type { ManageIntroRequests } from '../../../application/intros/intro-request'
 import type { ManageMatches } from '../../../application/matching/server-matching'
+import type { ManageModeration, ReportStatus } from '../../../application/moderation/moderation'
+import type { ManageNotificationPreferences } from '../../../application/notifications/notifications'
 import type { ManageOutcomeVerifications } from '../../../application/outcomes/server-outcome-verification'
 import type { ManageProfiles } from '../../../application/profiles/profile'
 import type { ManageSafety } from '../../../application/safety/safety'
@@ -9,6 +12,9 @@ import { assertUuid, readEnum, readObject, readPage, readString, readStringArray
 import { HttpError } from './security'
 
 export type Services = {
+  consents: ManageConsents
+  moderation: ManageModeration
+  notificationPreferences: ManageNotificationPreferences
   profiles: ManageProfiles
   intents: ManageIntents
   matches: ManageMatches
@@ -23,7 +29,7 @@ const languageTag = /^[A-Za-z]{2,8}(-[A-Za-z0-9]{1,8})*$/
 
 /** Every authenticated resource of the v1 contract. Path parameters are validated as UUIDs by the endpoint. */
 export function resources(services: Services): Resource[] {
-  const { profiles, intents, matches, intros, outcomes, safety } = services
+  const { consents, moderation, notificationPreferences, profiles, intents, matches, intros, outcomes, safety } = services
   return [
     {
       path: '/v1/session',
@@ -33,7 +39,31 @@ export function resources(services: Services): Resource[] {
       path: '/v1/me/profile',
       methods: {
         GET: read(({ actorId }) => profiles.get(actorId)),
-        PATCH: mutation('updateMyProfile', 200, readProfileInput, ({ actorId }, input) => profiles.update({ actorId, ...input })),
+        PATCH: mutation('updateMyProfile', 200, readProfileInput, ({ actorId }, input) => profiles.update({ actorId, ...input }), { consentExempt: true }),
+      },
+    },
+    {
+      path: '/v1/me/consents',
+      methods: {
+        GET: read(({ actorId }) => consents.get(actorId)),
+        PATCH: mutation('acceptConsents', 200, async request => {
+          const body = await readObject(request, ['adultConfirmed', 'termsVersion'])
+          if (typeof body.adultConfirmed !== 'boolean') throw new HttpError(400, 'invalid_request', 'adultConfirmed must be a boolean', 'adultConfirmed')
+          return { adultConfirmed: body.adultConfirmed, termsVersion: readString(body, 'termsVersion', 1, 40) }
+        }, ({ actorId }, input) => consents.accept(actorId, input), { consentExempt: true }),
+      },
+    },
+    {
+      path: '/v1/me/notification-preferences',
+      methods: {
+        GET: read(({ actorId }) => notificationPreferences.get(actorId)),
+        PATCH: mutation('updateNotificationPreferences', 200, async request => {
+          const body = await readObject(request, ['introRequests', 'introResponses', 'outcomes'])
+          for (const field of ['introRequests', 'introResponses', 'outcomes']) {
+            if (typeof body[field] !== 'boolean') throw new HttpError(400, 'invalid_request', `${field} must be a boolean`, field)
+          }
+          return { introRequests: body.introRequests as boolean, introResponses: body.introResponses as boolean, outcomes: body.outcomes as boolean }
+        }, ({ actorId }, input) => notificationPreferences.save(actorId, input), { consentExempt: true }),
       },
     },
     {
@@ -119,6 +149,35 @@ export function resources(services: Services): Resource[] {
     {
       path: '/v1/me/trust-signals',
       methods: { GET: read(async ({ actorId }) => ({ items: await outcomes.listTrustSignals(actorId) })) },
+    },
+    {
+      path: '/v1/me/roles',
+      methods: { GET: read(async ({ actorId }) => ({ moderator: await moderation.isModerator(actorId) })) },
+    },
+    {
+      path: '/v1/moderation/reports',
+      methods: {
+        GET: read(({ actorId, url }) => {
+          const requested = (url.searchParams.get('status') ?? 'open,reviewing').split(',')
+          const statuses = requested.filter((value): value is ReportStatus => ['open', 'reviewing', 'resolved', 'dismissed'].includes(value))
+          if (!statuses.length || statuses.length !== requested.length) throw new HttpError(400, 'invalid_request', 'status must list open, reviewing, resolved or dismissed', 'status')
+          return moderation.list(actorId, statuses).then(items => ({ items }))
+        }),
+      },
+    },
+    {
+      path: '/v1/moderation/reports/:reportId',
+      methods: {
+        PATCH: mutation('decideReport', 200, async request => {
+          const body = await readObject(request, ['status', 'note', 'suspend'], ['status'])
+          if (body.suspend !== undefined && typeof body.suspend !== 'boolean') throw new HttpError(400, 'invalid_request', 'suspend must be a boolean', 'suspend')
+          return {
+            status: readEnum(body, 'status', ['reviewing', 'resolved', 'dismissed'] as const),
+            note: body.note === undefined ? '' : readString(body, 'note', 0, 2000),
+            suspend: body.suspend === true,
+          }
+        }, ({ actorId, params }, input) => moderation.decide(actorId, params.reportId, input)),
+      },
     },
     {
       path: '/v1/blocks',

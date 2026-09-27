@@ -888,6 +888,273 @@
           }
         }
       }
+    },
+    "/me/consents": {
+      "get": {
+        "operationId": "getMyConsents",
+        "responses": {
+          "200": {
+            "description": "Consent state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Consent"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "patch": {
+        "operationId": "acceptConsents",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "adultConfirmed",
+                  "termsVersion"
+                ],
+                "properties": {
+                  "adultConfirmed": {
+                    "const": true
+                  },
+                  "termsVersion": {
+                    "type": "string",
+                    "maxLength": 40
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Consent state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Consent"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/me/notification-preferences": {
+      "get": {
+        "operationId": "getNotificationPreferences",
+        "responses": {
+          "200": {
+            "description": "Preferences",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationPreferences"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updateNotificationPreferences",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotificationPreferences"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Preferences",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationPreferences"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/me/roles": {
+      "get": {
+        "operationId": "getMyRoles",
+        "responses": {
+          "200": {
+            "description": "Staff roles",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "moderator"
+                  ],
+                  "properties": {
+                    "moderator": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/moderation/reports": {
+      "get": {
+        "operationId": "listModerationReports",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "default": "open,reviewing"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Queue, oldest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "items"
+                  ],
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ModerationReport"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/moderation/reports/{reportId}": {
+      "parameters": [
+        {
+          "name": "reportId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/Uuid"
+          }
+        }
+      ],
+      "patch": {
+        "operationId": "decideReport",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "status"
+                ],
+                "properties": {
+                  "status": {
+                    "enum": [
+                      "reviewing",
+                      "resolved",
+                      "dismissed"
+                    ]
+                  },
+                  "note": {
+                    "type": "string",
+                    "maxLength": 2000
+                  },
+                  "suspend": {
+                    "type": "boolean",
+                    "description": "Only with status resolved; suspends the reported member and revokes their sessions"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated report",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModerationReport"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2163,6 +2430,158 @@
             }
           }
         }
+      },
+      "Consent": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "adultConfirmed",
+          "termsVersion",
+          "acceptedAt",
+          "current"
+        ],
+        "properties": {
+          "adultConfirmed": {
+            "type": "boolean"
+          },
+          "termsVersion": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "acceptedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "current": {
+            "type": "boolean",
+            "description": "True when 18+ is confirmed and the current terms version is accepted. Mutations other than profile and consent return 403 consent_required until then."
+          }
+        }
+      },
+      "NotificationPreferences": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "introRequests",
+          "introResponses",
+          "outcomes"
+        ],
+        "properties": {
+          "introRequests": {
+            "type": "boolean",
+            "description": "Email when someone asks for an intro"
+          },
+          "introResponses": {
+            "type": "boolean",
+            "description": "Email when your intro is accepted"
+          },
+          "outcomes": {
+            "type": "boolean",
+            "description": "Email for outcome verification requests and decisions"
+          }
+        }
+      },
+      "ModerationReport": {
+        "type": "object",
+        "required": [
+          "id",
+          "subjectType",
+          "subjectId",
+          "subjectLabel",
+          "subjectUserId",
+          "subjectUserStatus",
+          "reasonCode",
+          "details",
+          "status",
+          "createdAt",
+          "decisions"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "subjectType": {
+            "enum": [
+              "user",
+              "intent",
+              "intro_request"
+            ]
+          },
+          "subjectId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "subjectLabel": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "subjectUserId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "subjectUserStatus": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reasonCode": {
+            "type": "string"
+          },
+          "details": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "open",
+              "reviewing",
+              "resolved",
+              "dismissed"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "decisions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "enum": [
+                    "open",
+                    "reviewing",
+                    "resolved",
+                    "dismissed"
+                  ]
+                },
+                "note": {
+                  "type": "string"
+                },
+                "suspendedUserId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "decidedAt": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          }
+        },
+        "description": "Moderator-only view. The reporter's identity is not exposed."
       }
     }
   }

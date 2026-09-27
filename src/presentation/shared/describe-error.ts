@@ -4,6 +4,7 @@ const byCode: Record<string, string> = {
   idempotency_conflict: 'Bu amal allaqachon boshqa ma’lumot bilan yuborilgan. Sahifani yangilab, qayta urinib ko‘ring.',
   invalid_csrf_token: 'Xavfsizlik tokeni eskirgan. Sahifani yangilang.',
   rate_limited: 'Bugungi limitga yetdingiz. Ertaga qayta urinib ko‘ring.',
+  consent_required: 'Davom etish uchun 18+ tasdig‘i va yangilangan shartlarni qabul qiling (Niyatni tahrirlash sahifasida).',
 }
 
 const byStatus: Record<number, string> = {

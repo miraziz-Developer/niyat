@@ -15,6 +15,11 @@ try {
       ('00000000-0000-4000-8000-000000000004', 'active', 'uz', 'Asia/Tashkent', true)
     ON CONFLICT (id) DO NOTHING;
 
+    -- Seeded demo members have accepted the alpha terms; the onboarding tester (…0004) has not.
+    UPDATE users SET terms_version = '2026-09-alpha', terms_accepted_at = now()
+    WHERE id IN ('00000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-000000000002', '00000000-0000-4000-8000-000000000003')
+      AND terms_version IS NULL;
+
     INSERT INTO profiles (user_id, display_name, bio, city_precision, languages, verification_level) VALUES
       ('00000000-0000-4000-8000-000000000001', 'Private Alpha User', 'NIYAT private alpha workspace', 'city', ARRAY['uz'], 1),
       ('00000000-0000-4000-8000-000000000002', 'Alpha Counterparty', 'Outcome verification counterparty', 'city', ARRAY['uz'], 1),

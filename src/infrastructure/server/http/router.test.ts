@@ -1,8 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
+import { currentTermsVersion, ManageConsents, type ConsentGateway } from '../../../application/consent/consent'
 import { InvalidCursorError, ManageIntents, type IntentGateway, type ServerIntent } from '../../../application/intents/intent'
 import { ApplicationError, ManageIntroRequests, type IntroRequestGateway } from '../../../application/intros/intro-request'
 import { ManageMatches, type MatchingGateway } from '../../../application/matching/server-matching'
 import { ManageOutcomeVerifications, type OutcomeVerificationGateway } from '../../../application/outcomes/server-outcome-verification'
+import { ManageModeration, type ModerationGateway } from '../../../application/moderation/moderation'
+import { ManageNotificationPreferences } from '../../../application/notifications/notifications'
 import { ManageProfiles, type ProfileGateway } from '../../../application/profiles/profile'
 import { ManageSafety, type SafetyGateway } from '../../../application/safety/safety'
 import { MemoryIdempotencyStore } from '../memory-idempotency-store'
@@ -17,6 +20,8 @@ const intentBody = { title: 'Launch', outcome: 'Ship an MVP', offers: ['design']
 const intent = { ...intentBody, id: resourceId, ownerId: actorId, createdAt: '2030-01-01T00:00:00.000Z', updatedAt: '2030-01-01T00:00:00.000Z' } as ServerIntent
 
 type Gateways = {
+  consents: ConsentGateway
+  moderation: ModerationGateway
   profiles: ProfileGateway
   intents: IntentGateway
   matches: MatchingGateway
@@ -27,6 +32,8 @@ type Gateways = {
 
 function setup(overrides: { [K in keyof Gateways]?: Partial<Gateways[K]> } = {}, sessions: SessionResolver = session()) {
   const gateways: Gateways = {
+    moderation: { isModerator: vi.fn().mockResolvedValue(false), list: vi.fn().mockResolvedValue(null), decide: vi.fn().mockResolvedValue(null), ...overrides.moderation },
+    consents: { get: vi.fn().mockResolvedValue({ adultConfirmed: true, termsVersion: currentTermsVersion, acceptedAt: '2030-01-01T00:00:00.000Z' }), accept: vi.fn(async (_actor, termsVersion) => ({ adultConfirmed: true, termsVersion, acceptedAt: '2030-01-01T00:00:00.000Z' })), ...overrides.consents },
     profiles: { find: vi.fn().mockResolvedValue(null), upsert: vi.fn(async command => ({ userId: command.actorId, displayName: command.displayName, bio: command.bio, languages: command.languages, verificationLevel: 1 })), ...overrides.profiles },
     intents: { create: vi.fn().mockResolvedValue(intent), find: vi.fn().mockResolvedValue(intent), update: vi.fn().mockResolvedValue(intent), remove: vi.fn().mockResolvedValue(true), list: vi.fn().mockResolvedValue({ items: [], page: { nextCursor: null } }), ...overrides.intents },
     matches: { refresh: vi.fn().mockResolvedValue(true), list: vi.fn().mockResolvedValue({ items: [], page: { nextCursor: null } }), ...overrides.matches },
@@ -35,8 +42,13 @@ function setup(overrides: { [K in keyof Gateways]?: Partial<Gateways[K]> } = {},
     safety: { block: vi.fn().mockResolvedValue(true), report: vi.fn().mockResolvedValue({ id: resourceId, status: 'open' }), ...overrides.safety },
   }
   const matches = new ManageMatches(gateways.matches)
+  const consents = new ManageConsents(gateways.consents)
   const router = createApiRouter({
     sessions,
+    consents,
+    consentGate: consents,
+    moderation: new ManageModeration(gateways.moderation),
+    notificationPreferences: new ManageNotificationPreferences({ get: vi.fn().mockResolvedValue({ introRequests: true, introResponses: true, outcomes: true }), save: vi.fn(async (_actor, value) => value) }),
     idempotency: new MemoryIdempotencyStore(),
     requestId: () => 'request-id',
     profiles: new ManageProfiles(gateways.profiles),
@@ -210,5 +222,59 @@ describe('API router: safety', () => {
     expect(await accepted.json()).toEqual({ id: resourceId, status: 'open' })
     expect((await router(send('POST', '/v1/reports', { subjectType: 'user', subjectId: otherId, reasonCode: 'spam', details: 'again' }))).status).toBe(429)
     expect((await router(send('POST', '/v1/reports', { subjectType: 'planet', subjectId: otherId, reasonCode: 'spam' }))).status).toBe(400)
+  })
+})
+
+describe('API router: consent gate', () => {
+  const pending = { get: vi.fn().mockResolvedValue({ adultConfirmed: false, termsVersion: null, acceptedAt: null }) }
+
+  it('blocks mutations until 18+ and current terms are accepted, but allows profile and consent', async () => {
+    const { router, intents, consents } = setup({ consents: pending })
+    const blocked = await router(send('POST', '/v1/intents', intentBody))
+    expect(blocked.status).toBe(403)
+    expect(await blocked.json()).toMatchObject({ code: 'consent_required' })
+    expect(intents.create).not.toHaveBeenCalled()
+    expect((await router(send('PATCH', '/v1/me/profile', { displayName: 'Ali', bio: '', languages: [] }))).status).toBe(200)
+    expect(await (await router(get('/v1/me/consents'))).json()).toMatchObject({ current: false })
+    expect((await router(send('PATCH', '/v1/me/consents', { adultConfirmed: true, termsVersion: 'old' }))).status).toBe(409)
+    expect((await router(send('PATCH', '/v1/me/consents', { adultConfirmed: 'yes', termsVersion: currentTermsVersion }))).status).toBe(400)
+    const accepted = await router(send('PATCH', '/v1/me/consents', { adultConfirmed: true, termsVersion: currentTermsVersion }))
+    expect(await accepted.json()).toMatchObject({ current: true })
+    expect(consents.accept).toHaveBeenCalledWith(actorId, currentTermsVersion)
+  })
+
+  it('never gates reads', async () => {
+    const { router } = setup({ consents: pending })
+    expect((await router(get('/v1/intents'))).status).toBe(200)
+  })
+})
+
+describe('API router: notification preferences', () => {
+  it('reads defaults and saves only complete boolean preferences', async () => {
+    const { router } = setup()
+    expect(await (await router(get('/v1/me/notification-preferences'))).json()).toEqual({ introRequests: true, introResponses: true, outcomes: true })
+    expect((await router(send('PATCH', '/v1/me/notification-preferences', { introRequests: false, introResponses: true }))).status).toBe(400)
+    const saved = await router(send('PATCH', '/v1/me/notification-preferences', { introRequests: false, introResponses: true, outcomes: false }))
+    expect(await saved.json()).toEqual({ introRequests: false, introResponses: true, outcomes: false })
+  })
+})
+
+describe('API router: moderation', () => {
+  it('reports roles and refuses the queue to non-moderators', async () => {
+    const { router } = setup()
+    expect(await (await router(get('/v1/me/roles'))).json()).toEqual({ moderator: false })
+    expect((await router(get('/v1/moderation/reports'))).status).toBe(403)
+  })
+
+  it('lets moderators filter the queue and decide with validation', async () => {
+    const report = { id: resourceId, status: 'resolved' }
+    const { router, moderation } = setup({ moderation: { isModerator: vi.fn().mockResolvedValue(true), list: vi.fn().mockResolvedValue([report]), decide: vi.fn().mockResolvedValue(report) } })
+    expect(await (await router(get('/v1/moderation/reports?status=open,resolved'))).json()).toEqual({ items: [report] })
+    expect(moderation.list).toHaveBeenCalledWith(actorId, ['open', 'resolved'])
+    expect((await router(get('/v1/moderation/reports?status=bogus'))).status).toBe(400)
+    expect((await router(send('PATCH', `/v1/moderation/reports/${resourceId}`, { status: 'open' }))).status).toBe(400)
+    expect((await router(send('PATCH', `/v1/moderation/reports/${resourceId}`, { status: 'dismissed', suspend: true }))).status).toBe(409)
+    expect((await router(send('PATCH', `/v1/moderation/reports/${resourceId}`, { status: 'resolved', note: 'Spam', suspend: true }))).status).toBe(200)
+    expect(moderation.decide).toHaveBeenCalledWith(actorId, resourceId, { status: 'resolved', note: 'Spam', suspend: true })
   })
 })

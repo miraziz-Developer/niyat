@@ -21,6 +21,7 @@ describe('PostgresOutcomeVerificationGateway', () => {
     expect(result.collaboration.status).toBe('verification-pending')
     expect(db.query.mock.calls[0][1]).toEqual([actor])
     expect(db.query.mock.calls[2][1]).toEqual([collaborationId, actor, 'Demo'])
+    expect(db.query.mock.calls[4][1]).toEqual([other, 'verification_requested', verificationId])
   })
 
   it('prevents the requester from confirming their own outcome before mutation', async () => {
@@ -34,9 +35,10 @@ describe('PostgresOutcomeVerificationGateway', () => {
     const verification = { id: verificationId, collaboration_id: collaborationId, requester_id: actor, evidence: 'Demo', status: 'pending', requested_at: '2030-01-02T00:00:00Z', resolved_at: null, resolved_by: null }
     const resolved = { ...verification, status: 'confirmed', resolved_at: '2030-01-03T00:00:00Z', resolved_by: other }
     const signal = { id: 'signal', collaboration_id: collaborationId, verification_id: verificationId, subject_id: actor, attester_id: other, label: 'Sprint', issued_at: '2030-01-03T00:00:00Z' }
-    const db = database([{ rows: [], rowCount: 1 }, { rows: [verification], rowCount: 1 }, { rows: [{ ...base, status: 'verification-pending' }], rowCount: 1 }, { rows: [resolved], rowCount: 1 }, { rows: [{ ...base, status: 'verified' }], rowCount: 1 }, { rows: [signal], rowCount: 1 }])
+    const db = database([{ rows: [], rowCount: 1 }, { rows: [verification], rowCount: 1 }, { rows: [{ ...base, status: 'verification-pending' }], rowCount: 1 }, { rows: [resolved], rowCount: 1 }, { rows: [{ ...base, status: 'verified' }], rowCount: 1 }, { rows: [], rowCount: 1 }, { rows: [signal], rowCount: 1 }])
     const result = await new PostgresOutcomeVerificationGateway(db.value).resolveVerification({ actorId: other, verificationId, decision: 'confirmed' })
     expect(result.trustSignal).toMatchObject({ subjectId: actor, attesterId: other })
-    expect(db.query.mock.calls[5][1]).toEqual([collaborationId, verificationId, actor, other, 'Sprint'])
+    expect(db.query.mock.calls[5][1]).toEqual([actor, 'verification_resolved', verificationId])
+    expect(db.query.mock.calls[6][1]).toEqual([collaborationId, verificationId, actor, other, 'Sprint'])
   })
 })

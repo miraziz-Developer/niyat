@@ -1,4 +1,7 @@
+import type { Consent } from '../consent/consent'
 import type { IntentInput, ServerIntent } from '../intents/intent'
+import type { DecisionInput, ModerationReport, ReportStatus } from '../moderation/moderation'
+import type { NotificationPreferences } from '../notifications/notifications'
 import type { IntroRequestStatus, ServerIntroRequest } from '../intros/intro-request'
 import type { ServerMatch } from '../matching/server-matching'
 import type { CollaborationDetail, ServerOutcomeVerification, ServerTrustSignal, VerificationDecision, VerificationResult } from '../outcomes/server-outcome-verification'
@@ -11,7 +14,8 @@ export type ProfileInput = Pick<ServerProfile, 'displayName' | 'bio' | 'language
 /** The authenticated NIYAT API as the browser sees it. Presentation depends on this port, never on fetch. */
 export interface NetworkClient {
   /** Rejects with NetworkError 401 when there is no session and no private-alpha bootstrap. */
-  connect(): Promise<{ userId: string; profile: ServerProfile | null }>
+  connect(): Promise<{ userId: string; profile: ServerProfile | null; consent: Consent; moderator: boolean }>
+  acceptConsents(termsVersion: string): Promise<Consent>
   requestMagicLink(email: string): Promise<void>
   /** Exchanges a single-use link token for a session cookie. */
   verifyMagicLink(token: string): Promise<void>
@@ -32,6 +36,10 @@ export interface NetworkClient {
   block(userId: string, reason?: string): Promise<void>
   report(subjectType: ReportSubject, subjectId: string, reasonCode: string, details?: string): Promise<void>
   signOut(): Promise<void>
+  listReports(statuses: ReportStatus[]): Promise<ModerationReport[]>
+  decideReport(reportId: string, input: DecisionInput): Promise<ModerationReport>
+  getNotificationPreferences(): Promise<NotificationPreferences>
+  saveNotificationPreferences(preferences: NotificationPreferences): Promise<NotificationPreferences>
 }
 
 export class NetworkError extends Error {

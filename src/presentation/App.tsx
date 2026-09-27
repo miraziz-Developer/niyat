@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
+import { currentTermsVersion, type Consent } from '../application/consent/consent'
 import type { IntentInput, ServerIntent } from '../application/intents/intent'
 import { NetworkError } from '../application/ports/network-client'
 import type { ServerProfile } from '../application/profiles/profile'
 import type { Intent } from '../domain/model/entities'
 import type { AppData, IntentDraft, Viewer } from './app.types'
+import { legalPaths } from './LegalPage'
 import { LoginPanel } from './LoginPanel'
 import { describeError } from './shared/describe-error'
 import { useNetwork } from './shared/network-context'
@@ -19,7 +21,7 @@ type ServerState =
   | { status: 'loading' }
   | { status: 'error'; message: string }
   | { status: 'signed-out'; notice?: string }
-  | { status: 'ready'; userId: string; profile: ServerProfile | null; intent: ServerIntent | null }
+  | { status: 'ready'; userId: string; profile: ServerProfile | null; consent: Consent; moderator: boolean; intent: ServerIntent | null }
 type Visibility = Extract<IntentInput['visibility'], 'matched' | 'public'>
 
 const demoViewer: Viewer = { name: 'Miraziz', subtitle: 'Builder · demo', verified: true }
@@ -75,6 +77,8 @@ function App({ data }: { data: AppData }) {
   const [storedDraft, setDraft] = usePersistentState<IntentDraft>(storageKeys.intentDraft, starterIntent, !network)
   const [server, setServer] = useState<ServerState>(network ? { status: 'loading' } : { status: 'local' })
   const [displayName, setDisplayName] = useState('')
+  const [adultChecked, setAdultChecked] = useState(false)
+  const [termsChecked, setTermsChecked] = useState(false)
   const [visibility, setVisibility] = useState<Visibility>('matched')
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
@@ -94,7 +98,7 @@ function App({ data }: { data: AppData }) {
         const intent = pickIntent(intents)
         setDraft(intent ? { title: intent.title, outcome: intent.outcome, offers: intent.offers, needs: intent.needs, topics: intent.topics, mode: intent.mode, horizon: intent.horizon } : emptyDraft)
         if (intent?.visibility === 'public') setVisibility('public')
-        setServer({ status: 'ready', userId: session.userId, profile: session.profile, intent })
+        setServer({ status: 'ready', userId: session.userId, profile: session.profile, consent: session.consent, moderator: session.moderator, intent })
       } catch (error) {
         if (cancelled) return
         if (error instanceof NetworkError && error.status === 401) {
@@ -110,6 +114,7 @@ function App({ data }: { data: AppData }) {
 
   const serverIntent = server.status === 'ready' ? server.intent : null
   const needsName = server.status === 'ready' && !server.profile
+  const needsConsent = server.status === 'ready' && !server.consent.current
   const intent: Intent = {
     id: serverIntent?.id ?? 'mine', title: draft.title, outcome: draft.outcome, offers: draft.offers, needs: draft.needs, topics: draft.topics,
     location: 'Global', mode: draft.mode ?? 'hybrid', horizon: draft.horizon ?? 'quarter', visibility: 'network',
@@ -121,6 +126,7 @@ function App({ data }: { data: AppData }) {
     { label: 'Kamida bitta taklif', done: draft.offers.length > 0 },
     { label: 'Kamida bitta ehtiyoj', done: draft.needs.length > 0 },
     { label: 'Kamida bitta mavzu', done: draft.topics.length > 0 },
+    ...(needsConsent ? [{ label: '18 yoshdan oshganlik tasdig‘i', done: adultChecked }, { label: 'Shartlar va maxfiylik siyosatiga rozilik', done: termsChecked }] : []),
   ]
   const completeness = Math.round(checklist.filter(item => item.done).length / checklist.length * 100)
   const ready = completeness === 100
@@ -138,6 +144,7 @@ function App({ data }: { data: AppData }) {
     setSaving(true)
     setSaveError('')
     try {
+      const consent = server.consent.current ? server.consent : await network.acceptConsents(currentTermsVersion)
       const profile = server.profile ?? await network.saveProfile({ displayName: displayName.trim(), bio: '', languages: ['uz'] })
       const current = server.intent && editableStatuses.includes(server.intent.status) ? server.intent : null
       const input: IntentInput = {
@@ -145,7 +152,7 @@ function App({ data }: { data: AppData }) {
         mode: draft.mode ?? 'hybrid', horizon: draft.horizon ?? 'quarter', visibility, status: 'active',
       }
       const saved = current ? await network.updateIntent(current.id, input) : await network.createIntent(input)
-      setServer({ ...server, profile, intent: saved })
+      setServer({ ...server, profile, consent, intent: saved })
       setScreen('product')
     } catch (error) {
       setSaveError(describeError(error, 'Niyat saqlanmadi. Qayta urinib ko‘ring.'))
@@ -161,14 +168,14 @@ function App({ data }: { data: AppData }) {
 
   function openWorkspace() {
     if (!network) { setDraft(starterIntent); setScreen('product'); return }
-    setScreen(serverIntent?.status === 'active' ? 'product' : 'create')
+    setScreen(serverIntent?.status === 'active' && !needsConsent ? 'product' : 'create')
   }
 
   if (screen === 'product') {
     return (
       <ProductApp
         intent={intent}
-        server={server.status === 'ready' ? { userId: server.userId, intentId: serverIntent?.id } : undefined}
+        server={server.status === 'ready' ? { userId: server.userId, intentId: serverIntent?.id, moderator: server.moderator } : undefined}
         viewer={viewer}
         data={{ people, circles, initialRequests }}
         onEdit={() => setScreen('create')}
@@ -250,6 +257,15 @@ function App({ data }: { data: AppData }) {
                 </div>
                 {network && <Segmented label="Kim ko‘radi" value={visibility} onChange={setVisibility} options={[{ value: 'matched', label: 'Faqat match’lar' }, { value: 'public', label: 'Barcha a’zolar' }]} />}
               </div>
+              {needsConsent && (
+                <div className="form-section">
+                  <h3>4 · Rozilik</h3>
+                  <div className="consent-checks">
+                    <label className="check-row"><input type="checkbox" checked={adultChecked} onChange={(event) => setAdultChecked(event.target.checked)} /><span>18 yoshdan oshganman.</span></label>
+                    <label className="check-row"><input type="checkbox" checked={termsChecked} onChange={(event) => setTermsChecked(event.target.checked)} /><span><a href={legalPaths.terms} target="_blank" rel="noreferrer">Foydalanish shartlari</a> va <a href={legalPaths.privacy} target="_blank" rel="noreferrer">maxfiylik siyosati</a> bilan tanishdim va roziman.</span></label>
+                  </div>
+                </div>
+              )}
               {!ready && (
                 <div className="form-section" aria-live="polite">
                   <h3>E’lon qilish uchun qoldi</h3>

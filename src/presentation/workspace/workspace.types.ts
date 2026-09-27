@@ -1,4 +1,4 @@
-export type WorkspaceSection = 'today' | 'discover' | 'requests' | 'circles' | 'progress' | 'trust'
+export type WorkspaceSection = 'today' | 'discover' | 'requests' | 'circles' | 'progress' | 'trust' | 'moderation'
 
 /** `short` is the mobile tab label; the full label is used in the sidebar and for screen readers. */
 export const workspaceNavigation: ReadonlyArray<{ id: WorkspaceSection; label: string; short: string; icon: string }> = [
@@ -9,3 +9,6 @@ export const workspaceNavigation: ReadonlyArray<{ id: WorkspaceSection; label: s
   { id: 'progress', label: 'Progress', short: 'Natija', icon: '↟' },
   { id: 'trust', label: 'Trust markazi', short: 'Trust', icon: '◎' },
 ]
+
+/** Shown only to staff; the server enforces the role on every moderation call. */
+export const moderationNavigation = { id: 'moderation' as const, label: 'Moderatsiya', short: 'Moder.', icon: '⚑' }

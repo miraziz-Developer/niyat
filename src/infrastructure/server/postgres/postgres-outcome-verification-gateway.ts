@@ -1,6 +1,7 @@
 import { ApplicationError } from '../../../application/intros/intro-request'
 import { assertCounterpartyResolver, assertParticipant, type CollaborationDetail, type OutcomeVerificationGateway, type ServerCollaboration, type ServerMilestone, type ServerOutcomeVerification, type ServerTrustSignal, type VerificationResult } from '../../../application/outcomes/server-outcome-verification'
 import type { SqlDatabase, SqlExecutor } from '../ports'
+import { enqueueNotification } from './postgres-notifications'
 import { withActor, toIso, isUniqueViolation, required } from './actor-transaction'
 
 type CollaborationRow = Record<string, unknown> & { id: string; intro_request_id: string; creator_id: string; counterparty_id: string; title: string; status: ServerCollaboration['status']; created_at: Date | string }
@@ -81,7 +82,10 @@ export class PostgresOutcomeVerificationGateway implements OutcomeVerificationGa
       const updated = await transaction.query<CollaborationRow>(`
         UPDATE collaborations SET status = 'verification-pending' WHERE id = $1
         RETURNING id, intro_request_id, creator_id, counterparty_id, title, status, created_at`, [command.collaborationId])
-      return { collaboration: mapCollaboration(required(updated.rows[0], 'collaboration')), verification: mapVerification(required(inserted.rows[0], 'verification')) }
+      const verification = mapVerification(required(inserted.rows[0], 'verification'))
+      const counterparty = command.actorId === collaboration.creatorId ? collaboration.counterpartyId : collaboration.creatorId
+      await enqueueNotification(transaction, counterparty, 'verification_requested', verification.id)
+      return { collaboration: mapCollaboration(required(updated.rows[0], 'collaboration')), verification }
     })
   }
 
@@ -103,6 +107,7 @@ export class PostgresOutcomeVerificationGateway implements OutcomeVerificationGa
         UPDATE collaborations SET status = $2 WHERE id = $1
         RETURNING id, intro_request_id, creator_id, counterparty_id, title, status, created_at`,
       [collaboration.id, command.decision === 'confirmed' ? 'verified' : 'outcome-ready'])
+      await enqueueNotification(transaction, verificationRow.requester_id, 'verification_resolved', command.verificationId)
       const result: VerificationResult = { collaboration: mapCollaboration(required(updated.rows[0], 'collaboration')), verification: mapVerification(required(resolved.rows[0], 'verification')) }
       if (command.decision === 'confirmed') {
         const signal = await transaction.query<TrustRow>(`

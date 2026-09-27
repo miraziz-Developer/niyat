@@ -24,13 +24,14 @@ function row(status = 'pending', counterpart: Record<string, unknown> = {}) {
 
 describe('PostgresIntroRequestGateway', () => {
   it('checks eligibility in the actor context, inserts, and retires the match from the eligible pool', async () => {
-    const db = database([ok, { rows: [{ receiver_id: receiverId }], rowCount: 1 }, { rows: [{ id: introId }], rowCount: 1 }, ok, { rows: [row()], rowCount: 1 }])
+    const db = database([ok, { rows: [{ receiver_id: receiverId }], rowCount: 1 }, { rows: [{ id: introId }], rowCount: 1 }, ok, ok, { rows: [row()], rowCount: 1 }])
     const result = await new PostgresIntroRequestGateway(db.value).create({ actorId, matchId, scope: 'Call', message: '' })
     expect(result).toMatchObject({ matchId, senderId: actorId, receiverId, status: 'pending', counterpart: null })
     expect(db.query.mock.calls[0]).toEqual([expect.stringContaining("set_config('app.user_id'"), [actorId]])
     expect(db.query.mock.calls[1]).toEqual([expect.stringContaining('eligible_intro_receiver'), [matchId, actorId]])
     expect(db.query.mock.calls[2][1]).toEqual([matchId, actorId, receiverId, 'Call', ''])
     expect(db.query.mock.calls[3][0]).toContain("status = 'intro_requested'")
+    expect(db.query.mock.calls[4]).toEqual([expect.stringContaining('INSERT INTO notification_outbox'), [receiverId, 'intro_requested', introId]])
   })
 
   it('denies creation when the authorization function returns no receiver', async () => {
@@ -56,9 +57,10 @@ describe('PostgresIntroRequestGateway', () => {
   it('connects the match on acceptance and reveals the counterpart it returns', async () => {
     const incoming = { ...row(), sender_id: receiverId, receiver_id: actorId }
     const counterpart = { counterpart_user_id: receiverId, counterpart_intent_id: matchId, counterpart_title: 'Growth', counterpart_offers: ['growth'], counterpart_needs: [], counterpart_display_name: 'Aziza', counterpart_verification_level: 1 }
-    const db = database([ok, { rows: [incoming], rowCount: 1 }, ok, ok, { rows: [{ ...incoming, status: 'accepted', ...counterpart }], rowCount: 1 }])
+    const db = database([ok, { rows: [incoming], rowCount: 1 }, ok, ok, ok, { rows: [{ ...incoming, status: 'accepted', ...counterpart }], rowCount: 1 }])
     const result = await new PostgresIntroRequestGateway(db.value).transition({ actorId, requestId: introId, status: 'accepted' })
     expect(db.query.mock.calls[3]).toEqual([expect.stringContaining("status = 'connected'"), [matchId]])
+    expect(db.query.mock.calls[4][1]).toEqual([receiverId, 'intro_accepted', introId])
     expect(result.counterpart).toEqual({ userId: receiverId, displayName: 'Aziza', verificationLevel: 1, intent: { id: matchId, title: 'Growth', offers: ['growth'], needs: [] } })
   })
 })

@@ -13,7 +13,8 @@ if (!password || password.length < 24) throw new Error('NIYAT_APP_DB_PASSWORD mu
 
 // Table privileges mirror what the gateways actually do; anything absent here is denied.
 const grants: Record<string, string[]> = {
-  users: ['SELECT', 'INSERT'],
+  // Column-scoped: the API may record consent and moderation status, never rewrite identity columns.
+  users: ['SELECT', 'INSERT', 'UPDATE (is_adult_confirmed, terms_version, terms_accepted_at, status, updated_at)'],
   auth_identities: ['SELECT', 'INSERT', 'UPDATE'],
   invitations: ['SELECT', 'UPDATE'],
   login_tokens: ['SELECT', 'INSERT', 'UPDATE'],
@@ -22,7 +23,7 @@ const grants: Record<string, string[]> = {
   matches: ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
   intro_requests: ['SELECT', 'INSERT', 'UPDATE'],
   blocks: ['SELECT', 'INSERT'],
-  reports: ['SELECT', 'INSERT'],
+  reports: ['SELECT', 'INSERT', 'UPDATE'],
   audit_events: ['INSERT'],
   collaborations: ['SELECT', 'INSERT', 'UPDATE'],
   collaboration_milestones: ['SELECT', 'INSERT', 'UPDATE'],
@@ -30,8 +31,14 @@ const grants: Record<string, string[]> = {
   trust_signals: ['SELECT', 'INSERT'],
   sessions: ['SELECT', 'INSERT', 'UPDATE'],
   idempotency_records: ['SELECT', 'INSERT', 'UPDATE'],
+  notification_preferences: ['SELECT', 'INSERT', 'UPDATE'],
+  notification_outbox: ['SELECT', 'INSERT', 'UPDATE'],
+  staff_roles: ['SELECT'],
+  report_decisions: ['SELECT', 'INSERT'],
+  analytics_events: ['INSERT'],
+  match_feedback: ['SELECT', 'INSERT', 'UPDATE'],
 }
-const functions = ['eligible_intro_receiver(uuid, uuid)', 'owns_intent(uuid)', 'matchable_intents(uuid)', 'match_counterpart(uuid)']
+const functions = ['eligible_intro_receiver(uuid, uuid)', 'owns_intent(uuid)', 'matchable_intents(uuid)', 'match_counterpart(uuid)', 'is_moderator()', 'run_maintenance()', 'moderation_subject(text, uuid, uuid)']
 
 const pool = new pg.Pool({ connectionString: databaseUrl, max: 1 })
 const client = await pool.connect()

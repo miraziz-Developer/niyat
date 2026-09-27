@@ -8,6 +8,6 @@
     "noEmit": true,
     "types": ["node"]
   },
-  "include": ["server", "scripts/migrate.ts", "scripts/seed-private-alpha.ts", "scripts/provision-runtime-role.ts", "scripts/invite.ts", "src/application/intros/intro-request.ts", "src/application/outcomes/server-outcome-verification.ts", "src/application/profiles/profile.ts", "src/application/intents/intent.ts", "src/application/auth/magic-link.ts", "src/application/matching/server-matching.ts", "src/application/safety/safety.ts", "src/domain/matching/score-intents.ts", "src/infrastructure/server/**/*.ts"],
+  "include": ["server", "scripts/migrate.ts", "scripts/seed-private-alpha.ts", "scripts/provision-runtime-role.ts", "scripts/invite.ts", "src/application/intros/intro-request.ts", "src/application/outcomes/server-outcome-verification.ts", "src/application/profiles/profile.ts", "src/application/intents/intent.ts", "src/application/auth/magic-link.ts", "src/application/consent/consent.ts", "src/application/notifications/notifications.ts", "src/application/moderation/moderation.ts", "scripts/staff.ts", "src/application/matching/server-matching.ts", "src/application/safety/safety.ts", "src/domain/matching/score-intents.ts", "src/infrastructure/server/**/*.ts"],
   "exclude": ["**/*.test.ts"]
 }

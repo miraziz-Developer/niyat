@@ -2,7 +2,13 @@ import type { IdempotencyStore, Session, SessionResolver } from '../ports'
 import { assertUuid, problem } from './request-validation'
 import { HttpError, requireCsrf, requireIdempotencyKey, requireSession } from './security'
 
-export type EndpointDependencies = { sessions: SessionResolver; idempotency: IdempotencyStore; requestId?: () => string }
+export type EndpointDependencies = {
+  sessions: SessionResolver
+  idempotency: IdempotencyStore
+  /** When present, mutations require the member to have accepted the current terms and confirmed 18+. */
+  consentGate?: { hasAcceptedCurrent(actorId: string): Promise<boolean> }
+  requestId?: () => string
+}
 export type Context = { request: Request; url: URL; session: Session; actorId: string; params: Record<string, string> }
 export type Operation = (context: Context, dependencies: EndpointDependencies) => Promise<Response>
 export type Methods = Partial<Record<'GET' | 'POST' | 'PATCH' | 'DELETE', Operation>>
@@ -18,10 +24,14 @@ export function mutation<Input>(
   status: 200 | 201 | 202 | 204,
   parse: (request: Request) => Promise<Input>,
   run: (context: Context, input: Input) => Promise<unknown>,
+  options: { consentExempt?: boolean } = {},
 ): Operation {
   return async (context, dependencies) => {
     requireCsrf(context.request, context.session)
     const key = requireIdempotencyKey(context.request)
+    if (!options.consentExempt && dependencies.consentGate && !await dependencies.consentGate.hasAcceptedCurrent(context.actorId)) {
+      throw new HttpError(403, 'consent_required', 'Confirm you are 18+ and accept the current terms first')
+    }
     const input = await parse(context.request)
     const fingerprint = JSON.stringify({ params: context.params, input })
     // Replay storage is JSON; `null` stands in for mutations without a response body.

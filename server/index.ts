@@ -2,6 +2,9 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { Readable } from 'node:stream'
 import pg from 'pg'
 import { ManageMagicLinks } from '../src/application/auth/magic-link'
+import { ManageConsents } from '../src/application/consent/consent'
+import { ManageModeration } from '../src/application/moderation/moderation'
+import { ManageNotificationPreferences, NotificationDispatcher } from '../src/application/notifications/notifications'
 import { ManageIntents } from '../src/application/intents/intent'
 import { ManageIntroRequests } from '../src/application/intros/intro-request'
 import { ManageMatches } from '../src/application/matching/server-matching'
@@ -11,12 +14,16 @@ import { ManageSafety } from '../src/application/safety/safety'
 import { loadConfig } from '../src/infrastructure/server/config'
 import { clientIpHeader, createAuthHandler } from '../src/infrastructure/server/http/auth-endpoints'
 import { RateLimiter } from '../src/infrastructure/server/http/rate-limiter'
+import { schedule } from '../src/infrastructure/server/jobs'
 import { createApiRouter } from '../src/infrastructure/server/http/router'
 import { HttpError, requireCsrf, requireSession } from '../src/infrastructure/server/http/security'
 import { ConsoleMailer, ResendMailer } from '../src/infrastructure/server/mail'
 import { PgDatabase } from '../src/infrastructure/server/postgres/pg-database'
+import { PostgresConsentGateway } from '../src/infrastructure/server/postgres/postgres-consent-gateway'
+import { PostgresNotificationQueue, PostgresPreferencesGateway } from '../src/infrastructure/server/postgres/postgres-notifications'
 import { PostgresIdempotencyStore } from '../src/infrastructure/server/postgres/postgres-idempotency-store'
 import { PostgresIntentGateway } from '../src/infrastructure/server/postgres/postgres-intent-gateway'
+import { PostgresModerationGateway } from '../src/infrastructure/server/postgres/postgres-moderation-gateway'
 import { PostgresMagicLinkGateway } from '../src/infrastructure/server/postgres/postgres-magic-link-gateway'
 import { PostgresIntroRequestGateway } from '../src/infrastructure/server/postgres/postgres-intro-request-gateway'
 import { PostgresMatchingGateway } from '../src/infrastructure/server/postgres/postgres-matching-gateway'
@@ -43,8 +50,13 @@ const auth = config.appOrigin
     })
   : undefined
 const matches = new ManageMatches(new PostgresMatchingGateway(database))
+const consents = new ManageConsents(new PostgresConsentGateway(database))
 const router = createApiRouter({
   sessions,
+  consents,
+  consentGate: consents,
+  moderation: new ManageModeration(new PostgresModerationGateway(database)),
+  notificationPreferences: new ManageNotificationPreferences(new PostgresPreferencesGateway(database)),
   idempotency: new PostgresIdempotencyStore(database),
   profiles: new ManageProfiles(new PostgresProfileGateway(database)),
   intents: new ManageIntents(new PostgresIntentGateway(database), matches),
@@ -56,6 +68,21 @@ const router = createApiRouter({
 })
 const { port, host } = config
 const devBootstrap = config.authMode === 'local' && !config.production
+
+// Background work stays in this process for the single-host alpha; both jobs are safe to run on several instances
+// (the outbox leases rows with SKIP LOCKED, maintenance statements are idempotent).
+const jobs = [
+  schedule('maintenance', 60 * 60_000, async () => {
+    const result = await pool.query('SELECT * FROM run_maintenance()')
+    const counts = result.rows[0] as Record<string, number>
+    if (Object.values(counts).some(count => count > 0)) console.log(`maintenance ${JSON.stringify(counts)}`)
+  }),
+  // Links in notifications need the public origin; without it (bare local dev) the outbox simply waits.
+  ...(config.appOrigin ? [schedule('notifications', 30_000, async () => {
+    const dispatcher = new NotificationDispatcher(new PostgresNotificationQueue(database), mailer, config.appOrigin!)
+    while (await dispatcher.runOnce() > 0) { /* drain the backlog */ }
+  })] : []),
+]
 
 const server = createServer(async (incoming, outgoing) => {
   try {
@@ -84,7 +111,7 @@ const server = createServer(async (incoming, outgoing) => {
 })
 
 server.listen(port, host, () => console.log(`NIYAT API listening on http://${host}:${port} (auth: ${config.authMode}${config.appOrigin ? `, magic links for ${config.appOrigin} via ${config.mail.transport}` : ''})`))
-for (const signal of ['SIGINT', 'SIGTERM'] as const) process.on(signal, () => server.close(() => pool.end().finally(() => process.exit(0))))
+for (const signal of ['SIGINT', 'SIGTERM'] as const) process.on(signal, () => { for (const job of jobs) job.stop(); server.close(() => pool.end().finally(() => process.exit(0))) })
 
 async function toWebRequest(request: IncomingMessage): Promise<Request> {
   const origin = `http://${request.headers.host ?? `${host}:${port}`}`

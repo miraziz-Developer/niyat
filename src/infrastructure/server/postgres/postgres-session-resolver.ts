@@ -15,6 +15,8 @@ export class PostgresSessionResolver implements SessionResolver {
     const result = await this.pool.query<SessionRow>(`
       UPDATE sessions SET last_seen_at = now()
       WHERE token_hash = $1 AND revoked_at IS NULL AND expires_at > now()
+        -- A suspended or deleted member loses access immediately, even with an unexpired cookie.
+        AND EXISTS (SELECT 1 FROM users WHERE users.id = sessions.user_id AND users.status = 'active')
       RETURNING user_id, csrf_token, expires_at`, [hash(token)])
     const row = result.rows[0]
     return row ? { userId: row.user_id, csrfToken: row.csrf_token, expiresAt: new Date(row.expires_at).toISOString() } : null

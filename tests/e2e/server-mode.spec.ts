@@ -56,6 +56,10 @@ test('new member onboards, matches anonymously, and completes a counterparty-ver
   await page.getByLabel(/Sen nima bera olasan/).fill('engineering, ai')
   await page.getByLabel(/Senga nima kerak/).fill('product design, distribution')
   await page.getByLabel(/Asosiy mavzular/).fill('ai, education')
+  // First sign-in requires 18+ confirmation and terms acceptance; publishing stays disabled until both are ticked.
+  await expect(page.getByRole('button', { name: /Niyatni tarmoqqa chiqarish/ })).toBeDisabled()
+  await page.getByRole('checkbox', { name: '18 yoshdan oshganman.' }).check()
+  await page.getByRole('checkbox', { name: /roziman/ }).check()
   await page.getByRole('button', { name: /Niyatni tarmoqqa chiqarish/ }).click()
   await expect(page.getByText('Xayrli tong, Aziza Karimova.')).toBeVisible()
 

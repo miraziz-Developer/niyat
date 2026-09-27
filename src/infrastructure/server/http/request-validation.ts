@@ -61,6 +61,8 @@ export function problem(error: unknown, requestId: string): Response {
     : error instanceof IdempotencyConflictError ? new HttpError(409, 'idempotency_conflict', error.message)
     : error instanceof ApplicationError ? new HttpError(statusFor[error.code], error.code, error.message)
     : new HttpError(500, 'internal_error', 'An unexpected error occurred')
+  // Unexpected failures are logged with the request id the client received, so a report can be traced.
+  if (mapped.status >= 500) console.error(JSON.stringify({ level: 'error', requestId, error: error instanceof Error ? { name: error.name, message: error.message, stack: error.stack } : String(error) }))
   return Response.json(
     { code: mapped.code, message: mapped.message, ...(mapped.field ? { field: mapped.field } : {}), requestId },
     { status: mapped.status, headers: { 'content-type': 'application/problem+json' } },

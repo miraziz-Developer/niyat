@@ -15,6 +15,7 @@
     "db:provision-role": "tsx scripts/provision-runtime-role.ts",
     "db:seed:private-alpha": "tsx scripts/seed-private-alpha.ts",
     "invite": "tsx scripts/invite.ts",
+    "staff": "tsx scripts/staff.ts",
     "db:migrate:local": "DATABASE_URL=postgresql://niyat:niyat_local_only@127.0.0.1:55432/niyat sh -c 'npm run db:migrate && NIYAT_APP_DB_PASSWORD=niyat_app_local_only_password npm run db:provision-role'",
     "smoke:api": "node scripts/runtime-smoke.mjs",
     "smoke:network": "node scripts/network-smoke.mjs",

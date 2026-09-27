@@ -3,6 +3,7 @@ import { completeMilestone, createCollaboration } from '../../application/collab
 import { rankMatches } from '../../application/matching/rank-matches'
 import { requestOutcomeVerification, resolveOutcomeVerification } from '../../application/outcomes/manage-outcome-verification'
 import { createIntroRequest, transitionIntroRequest } from '../../application/requests/manage-intro-request'
+import type { NotificationPreferences } from '../../application/notifications/notifications'
 import { NetworkError } from '../../application/ports/network-client'
 import type { Circle, Collaboration, Intent, IntroRequest, Match, OutcomeVerification, Person, TrustSignal } from '../../domain/model/entities'
 import type { Viewer } from '../app.types'
@@ -14,7 +15,8 @@ import { usePersistentState } from '../shared/use-persistent-state'
 import { useTransientNotice } from '../shared/use-transient-notice'
 import { mapCollaboration, mapServerIntro, mapServerMatch, mapTrustSignal, mapVerification, uniquePeople, unknownPerson } from './server-workspace-mappers'
 import { CompactMatch, EmptyState, LoadingState, MatchDrawer, MiniMark, SectionTitle, Toggle } from './WorkspaceComponents'
-import { workspaceNavigation, type WorkspaceSection } from './workspace.types'
+import { ModerationView } from './ModerationView'
+import { moderationNavigation, workspaceNavigation, type WorkspaceSection } from './workspace.types'
 
 type WorkspaceData = {
   people: Person[]
@@ -25,7 +27,7 @@ type WorkspaceData = {
 type ProductAppProps = {
   intent: Intent
   /** Server mode: the authenticated member and, once saved, their intent. */
-  server?: { userId: string; intentId?: string }
+  server?: { userId: string; intentId?: string; moderator?: boolean }
   viewer: Viewer
   data: WorkspaceData
   onEdit: () => void
@@ -63,6 +65,7 @@ export default function ProductApp({ intent, server, viewer, data, onEdit, onExi
   const matches = (local ? localMatches : serverMatches).filter(match => !hidden.includes(match.person.id))
   const people = local ? data.people : serverPeople
   const findPerson = (id: string) => people.find(person => person.id === id) ?? unknownPerson(id)
+  const navigation = server?.moderator ? [...workspaceNavigation, moderationNavigation] : workspaceNavigation
   const pendingCount = requests.filter((request) => request.status === 'pending' && request.direction === 'incoming').length
 
   const refresh = useCallback(async () => {
@@ -211,7 +214,7 @@ export default function ProductApp({ intent, server, viewer, data, onEdit, onExi
         <button className="side-brand" onClick={() => navigate('today')}><MiniMark /><b>niyat</b></button>
         <div className="side-caption">Workspace</div>
         <nav className="side-links" aria-label="Bo‘limlar">
-          {workspaceNavigation.map((item) => <button key={item.id} className={section === item.id ? 'active' : ''} aria-current={section === item.id ? 'page' : undefined} onClick={() => navigate(item.id)}><i aria-hidden="true">{item.icon}</i>{item.label}{item.id === 'requests' && pendingCount > 0 && <em aria-label={`${pendingCount} ta yangi`}>{pendingCount}</em>}</button>)}
+          {navigation.map((item) => <button key={item.id} className={section === item.id ? 'active' : ''} aria-current={section === item.id ? 'page' : undefined} onClick={() => navigate(item.id)}><i aria-hidden="true">{item.icon}</i>{item.label}{item.id === 'requests' && pendingCount > 0 && <em aria-label={`${pendingCount} ta yangi`}>{pendingCount}</em>}</button>)}
         </nav>
         <button className="active-intent-mini" style={{ textAlign: 'left', color: 'inherit', font: 'inherit', cursor: 'pointer' }} onClick={onEdit} aria-label="Faol niyatni tahrirlash">
           <span>Faol niyat</span><b>{intent.title}</b><div aria-hidden="true"><i style={{ width: `${journey}%` }} /></div><small>{matches.length} kesishma · {connectedCount} aloqa</small>
@@ -223,7 +226,7 @@ export default function ProductApp({ intent, server, viewer, data, onEdit, onExi
         {serverStatus === 'connected' && <div className="api-status connected" role="status"><span aria-hidden="true">●</span> Serverga ulangan · o‘zgarishlar saqlanadi</div>}
         {serverStatus === 'error' && <div className="api-status error" role="alert">Server bilan aloqa uzildi yoki sessiya tugagan. <button onClick={() => { setServerStatus('loading'); refresh().catch(() => setServerStatus('error')) }}>Qayta urinish</button></div>}
         <nav className="mobile-product-nav" aria-label="Bo‘limlar">
-          {workspaceNavigation.map(item => <button aria-label={item.label} aria-current={section === item.id ? 'page' : undefined} className={section === item.id ? 'active' : ''} key={item.id} onClick={() => navigate(item.id)}><span aria-hidden="true">{item.icon}</span><small aria-hidden="true">{item.short}</small>{item.id === 'requests' && pendingCount > 0 && <em aria-hidden="true">{pendingCount}</em>}</button>)}
+          {navigation.map(item => <button aria-label={item.label} aria-current={section === item.id ? 'page' : undefined} className={section === item.id ? 'active' : ''} key={item.id} onClick={() => navigate(item.id)}><span aria-hidden="true">{item.icon}</span><small aria-hidden="true">{item.short}</small>{item.id === 'requests' && pendingCount > 0 && <em aria-hidden="true">{pendingCount}</em>}</button>)}
         </nav>
 
         <main>
@@ -233,6 +236,7 @@ export default function ProductApp({ intent, server, viewer, data, onEdit, onExi
           {!loading && section === 'requests' && <RequestsView requests={requests} findPerson={findPerson} collaborations={collaborations} busy={busy} onUpdate={updateRequest} onStartCollaboration={startCollaboration} onDiscover={() => navigate('discover')} />}
           {!loading && section === 'circles' && <CirclesView circles={local ? data.circles : []} joined={joined} onJoin={(circle) => { setJoined((current) => current.includes(circle.id) ? current : [...current, circle.id]); showNotice(`“${circle.title}” doirasiga qo‘shilding`) }} />}
           {!loading && section === 'progress' && <ProgressView collaborations={collaborations} verifications={verifications} findPerson={findPerson} local={local} busy={busy} onCompleteMilestone={finishMilestone} onSubmitOutcome={submitOutcome} onResolveOutcome={resolveOutcome} onRequests={() => navigate('requests')} />}
+          {!loading && section === 'moderation' && network && server?.moderator && <ModerationView network={network} notify={showNotice} />}
           {!loading && section === 'trust' && <TrustView viewer={viewer} local={local} actorId={actorId} trustSignals={trustSignals} findPerson={findPerson} onSignOut={signOut} />}
         </main>
       </div>
@@ -361,6 +365,7 @@ function TrustView({ viewer, local, actorId, trustSignals, findPerson, onSignOut
     <div className="trust-grid">
       <div className="panel"><div className="panel-title"><span>Identitet</span>{viewer.verified && <small className="verified">✓ Tasdiqlangan</small>}</div><div className="identity-row"><span className="profile-big" aria-hidden="true">{viewer.name[0]?.toUpperCase()}</span><div><h3>{viewer.name}</h3><p>{local ? 'Local demo · ma’lumot faqat shu brauzerda' : `Private alpha sessiyasi · ${actorId.slice(0, 8)}`}</p></div></div><p className="panel-note">Ismingiz match’larda yashirin turadi va faqat intro qabul qilingach ochiladi.</p></div>
       <div className="panel"><div className="panel-title"><span>Ruxsatlar</span><small>Shu qurilmada</small></div><Toggle label="Faqat matchlar profilimni ko‘rsin" active={settings.matchedOnly} onClick={() => toggle('matchedOnly')} /><Toggle label="AI faqat draft tayyorlasin" active={settings.aiDrafts} onClick={() => toggle('aiDrafts')} /><Toggle label="Faollik holatini ko‘rsatish" active={settings.activity} onClick={() => toggle('activity')} /><Toggle label="Anonim product analytics" active={settings.analytics} onClick={() => toggle('analytics')} /></div>
+      {!local && <NotificationPanel />}
       <div className="panel wide trust-signals"><div className="panel-title"><span>Tasdiqlangan natijalar</span><small>{trustSignals.length} signal</small></div>{trustSignals.length === 0 ? <p className="trust-empty">Hamkor tasdiqlagan natijalar shu yerda paydo bo‘ladi. Signal faqat ikki tomon qaroridan keyin yaratiladi.</p> : trustSignals.map(signal => <div className="trust-signal" key={signal.id}><i aria-hidden="true">✓</i><div><b>{signal.label}</b><span>{findPerson(signal.personId).name} tasdiqladi · {formatShortDate(signal.issuedAt)}</span></div></div>)}</div>
       <div className="panel wide"><div className="panel-title"><span>Ma’lumotlarni boshqarish</span></div>
         {confirmExit
@@ -369,4 +374,33 @@ function TrustView({ viewer, local, actorId, trustSignals, findPerson, onSignOut
       </div>
     </div>
   </section>
+}
+
+const notificationLabels: Array<[keyof NotificationPreferences, string]> = [
+  ['introRequests', 'Menga intro so‘rovi kelganda'],
+  ['introResponses', 'Intro so‘rovim qabul qilinganda'],
+  ['outcomes', 'Natijani tasdiqlash so‘ralganda yoki qaror chiqqanda'],
+]
+
+/** Saves each toggle immediately and rolls it back if the server refuses. */
+function NotificationPanel() {
+  const network = useNetwork()
+  const [preferences, setPreferences] = useState<NotificationPreferences | null>(null)
+  const [error, setError] = useState('')
+  useEffect(() => { network?.getNotificationPreferences().then(setPreferences).catch(() => setError('Sozlamalarni yuklab bo‘lmadi.')) }, [network])
+
+  async function toggle(key: keyof NotificationPreferences) {
+    if (!network || !preferences) return
+    const previous = preferences
+    const next = { ...preferences, [key]: !preferences[key] }
+    setPreferences(next)
+    setError('')
+    try { setPreferences(await network.saveNotificationPreferences(next)) } catch (caught) { setPreferences(previous); setError(describeError(caught)) }
+  }
+
+  return <div className="panel"><div className="panel-title"><span>Email bildirishnomalar</span></div>
+    {preferences ? notificationLabels.map(([key, label]) => <Toggle key={key} label={label} active={preferences[key]} onClick={() => void toggle(key)} />) : !error && <LoadingState rows={1} />}
+    {error && <p className="form-error" role="alert">{error}</p>}
+    <p className="panel-note">Xatlarda hech kimning ismi yozilmaydi — tafsilotlar faqat ilova ichida.</p>
+  </div>
 }

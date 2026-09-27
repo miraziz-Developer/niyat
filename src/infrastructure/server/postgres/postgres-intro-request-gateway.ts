@@ -1,6 +1,7 @@
 import { ApplicationError, assertIntroTransitionActor, type CreateIntroRequestCommand, type IntroRequestGateway, type ServerIntroRequest, type TransitionIntroRequestCommand } from '../../../application/intros/intro-request'
 import type { SqlDatabase, SqlExecutor } from '../ports'
 import { isUniqueViolation, toIso, withActor } from './actor-transaction'
+import { enqueueNotification } from './postgres-notifications'
 
 type IntroRow = Record<string, unknown> & {
   id: string
@@ -51,6 +52,7 @@ export class PostgresIntroRequestGateway implements IntroRequestGateway {
       }
       // One intro per match: the match leaves the eligible pool so a declined request cannot be re-sent.
       await transaction.query(`UPDATE matches SET status = 'intro_requested', updated_at = now() WHERE id = $1`, [command.matchId])
+      await enqueueNotification(transaction, receiverId, 'intro_requested', id)
       return this.read(transaction, id)
     })
   }
@@ -66,6 +68,7 @@ export class PostgresIntroRequestGateway implements IntroRequestGateway {
       await transaction.query(`UPDATE intro_requests SET status = $2 WHERE id = $1`, [command.requestId, command.status])
       if (command.status === 'accepted') {
         await transaction.query(`UPDATE matches SET status = 'connected', updated_at = now() WHERE id = $1`, [request.match_id])
+        await enqueueNotification(transaction, request.sender_id, 'intro_accepted', command.requestId)
       }
       return this.read(transaction, command.requestId)
     })

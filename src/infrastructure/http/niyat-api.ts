@@ -1,4 +1,7 @@
+import type { Consent } from '../../application/consent/consent'
 import type { IntentInput, ServerIntent } from '../../application/intents/intent'
+import type { DecisionInput, ModerationReport, ReportStatus } from '../../application/moderation/moderation'
+import type { NotificationPreferences } from '../../application/notifications/notifications'
 import type { ServerIntroRequest } from '../../application/intros/intro-request'
 import type { ServerMatch } from '../../application/matching/server-matching'
 import type { CollaborationDetail, ServerTrustSignal, VerificationDecision, VerificationResult } from '../../application/outcomes/server-outcome-verification'
@@ -27,8 +30,11 @@ export class NiyatApi implements NetworkClient {
       if (error instanceof NetworkError && error.status === 404) return null
       throw error
     })
-    return { userId: this.session.userId, profile }
+    const [consent, roles] = await Promise.all([this.request<Consent>('/me/consents'), this.request<{ moderator: boolean }>('/me/roles')])
+    return { userId: this.session.userId, profile, consent, moderator: roles.moderator }
   }
+
+  acceptConsents(termsVersion: string) { return this.mutate<Consent>('/me/consents', 'PATCH', { adultConfirmed: true, termsVersion }) }
 
   async requestMagicLink(email: string) {
     await this.request('/auth/magic-link', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email }) })
@@ -54,6 +60,12 @@ export class NiyatApi implements NetworkClient {
   resolveVerification(verificationId: string, decision: VerificationDecision) { return this.mutate<VerificationResult>(`/outcome-verifications/${verificationId}`, 'PATCH', { decision }) }
   async block(userId: string, reason?: string) { await this.mutate('/blocks', 'POST', { blockedUserId: userId, ...(reason ? { reason } : {}) }) }
   async report(subjectType: ReportSubject, subjectId: string, reasonCode: string, details?: string) { await this.mutate('/reports', 'POST', { subjectType, subjectId, reasonCode, ...(details ? { details } : {}) }) }
+
+  getNotificationPreferences() { return this.request<NotificationPreferences>('/me/notification-preferences') }
+  saveNotificationPreferences(preferences: NotificationPreferences) { return this.mutate<NotificationPreferences>('/me/notification-preferences', 'PATCH', preferences) }
+
+  async listReports(statuses: ReportStatus[]) { return (await this.request<{ items: ModerationReport[] }>(`/moderation/reports?status=${statuses.join(',')}`)).items }
+  decideReport(reportId: string, input: DecisionInput) { return this.mutate<ModerationReport>(`/moderation/reports/${reportId}`, 'PATCH', input) }
 
   async signOut() {
     await this.mutate('/session', 'DELETE')
