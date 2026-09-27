@@ -23,6 +23,8 @@ export type ServerMatch = {
   limitations: string[]
   counterpart: MatchCounterpart
   intro: { id: string; status: string; direction: 'incoming' | 'outgoing' } | null
+  /** The viewer's own usefulness rating, if given. */
+  myFeedback: boolean | null
 }
 
 export type MatchPage = { items: ServerMatch[]; page: { nextCursor: string | null } }
@@ -32,6 +34,8 @@ export interface MatchingGateway {
   /** Recomputes matches for an owned active intent; clears unengaged matches otherwise. Returns false when the actor does not own it. */
   refresh(actorId: string, intentId: string): Promise<boolean>
   list(query: ListMatchesQuery): Promise<MatchPage | null>
+  /** Records the viewer's rating; false when the match is not visible to them. */
+  rate(actorId: string, matchId: string, useful: boolean): Promise<boolean>
 }
 
 export class ManageMatches {
@@ -43,5 +47,10 @@ export class ManageMatches {
     const page = await this.gateway.list(query)
     if (!page) throw new ApplicationError('not_found', 'Intent was not found')
     return page
+  }
+
+  async rate(actorId: string, matchId: string, useful: boolean): Promise<{ matchId: string; useful: boolean }> {
+    if (!await this.gateway.rate(actorId, matchId, useful)) throw new ApplicationError('not_found', 'Match was not found')
+    return { matchId, useful }
   }
 }

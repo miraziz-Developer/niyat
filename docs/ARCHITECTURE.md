@@ -57,6 +57,14 @@ HTTP qatlami bitta `endpoint` helper (session, CSRF, `Idempotency-Key`, UUID pat
 
 `domain/matching/score-intents.ts` simmetrik skor beradi: juftlik bir marta canonical tartibda (`left_intent_id < right_intent_id`) saqlanadi va har tomon uchun alohida tushuntiriladi. Niyat yaratilganda yoki yangilanganda `ManageIntents` match’larni qayta hisoblaydi; faol bo‘lmagan yoki maxfiy niyatning intro tarixi yo‘q match’lari olib tashlanadi. Boshqa foydalanuvchi niyatini o‘qish faqat `SECURITY DEFINER` funksiyalar orqali bo‘ladi (`matchable_intents`, `match_counterpart`): ular block’larni hisobga oladi va `display_name`ni faqat qabul qilingan intro’dan keyin qaytaradi. `matches` jadvalida RLS yoqilgan.
 
+## Alpha operatsiyalari
+
+- **Rozilik:** `ManageConsents` joriy shartlar versiyasini beradi; `endpoint` helperidagi `consentGate` profil, rozilik va bildirishnoma sozlamalaridan boshqa barcha mutatsiyalarni 18+ va joriy shartlar qabul qilinguncha `403 consent_required` bilan to‘xtatadi.
+- **Bildirishnomalar:** gateway’lar `enqueueNotification` orqali outbox qatorini biznes tranzaksiyasi ichida yozadi. `NotificationDispatcher` (application) `NotificationQueue` va `Mailer` portlariga tayanadi; Postgres navbati qatorlarni `FOR UPDATE SKIP LOCKED` bilan lease qiladi, shuning uchun bir nechta instans xavfsiz.
+- **Moderatsiya:** `staff_roles` va `is_moderator()` RLS siyosatlari; moderator boshqa a’zolar niyatini faqat `moderation_subject()` orqali (qisqa yorliq) ko‘radi. To‘xtatilgan a’zo sessiya tekshiruvidan va `matchable_intents`dan o‘tmaydi.
+- **Analytics:** `recordEvent` hodisani chaqiruvchi tranzaksiyasida yozadi (rollback bo‘lgan ish hisoblanmaydi); matn yozilmaydi. `scripts/metrics.ts` Gate 2 chiqish ko‘rsatkichlarini hisoblaydi.
+- **Texnik xizmat:** `run_maintenance()` (SECURITY DEFINER, actor’siz ishlaydi) va `infrastructure/server/jobs.ts` scheduler’i; runtime rolga keng DELETE grantlari kerak emas.
+
 ## Self-hosted runtime
 
 `compose.yaml` bitta hostda PostgreSQL 17, bir martalik migration/seed joblari, Node API va Nginx static frontend/reverse proxy’ni boshqaradi. Tashqi trafik faqat web portga kiradi; `/v1` Nginx orqali ichki `api:3000` servisiga uzatiladi. PostgreSQL bind mount `.local/postgres`da persistent saqlanadi va public interface’ga bind qilinmaydi. `scripts/server-up.sh` clone’dan keyingi idempotent build, migrate va start orchestration’ni bajaradi.

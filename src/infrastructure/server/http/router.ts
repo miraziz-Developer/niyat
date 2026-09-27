@@ -6,7 +6,13 @@ import { HttpError } from './security'
 
 type Route = { pattern: RegExp; names: string[]; handle: ReturnType<typeof endpoint> }
 
-export function createApiRouter(dependencies: EndpointDependencies & Services & { auth?: ReturnType<typeof createAuthHandler> }) {
+type RouterDependencies = EndpointDependencies & Services & {
+  auth?: ReturnType<typeof createAuthHandler>
+  /** Readiness probe: resolves true when the database answers. */
+  ready?: () => Promise<boolean>
+}
+
+export function createApiRouter(dependencies: RouterDependencies) {
   const routes: Route[] = resources(dependencies).map(({ path, methods }) => {
     const names: string[] = []
     const source = path.replace(/:([A-Za-z]+)/g, (_, name: string) => { names.push(name); return '([^/]+)' })
@@ -16,6 +22,10 @@ export function createApiRouter(dependencies: EndpointDependencies & Services & 
   return async (request: Request): Promise<Response> => {
     const { pathname } = new URL(request.url)
     if (pathname === '/v1/health' && request.method === 'GET') return Response.json({ status: 'ok' })
+    if (pathname === '/v1/ready' && request.method === 'GET') {
+      const ready = await (dependencies.ready?.() ?? Promise.resolve(true)).catch(() => false)
+      return Response.json({ status: ready ? 'ready' : 'unavailable' }, { status: ready ? 200 : 503 })
+    }
     const authResponse = await dependencies.auth?.(request, pathname)
     if (authResponse) return authResponse
     for (const route of routes) {

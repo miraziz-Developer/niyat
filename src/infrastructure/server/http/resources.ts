@@ -86,6 +86,16 @@ export function resources(services: Services): Resource[] {
       methods: { GET: read(({ actorId, params, url }) => matches.list({ actorId, intentId: params.intentId, ...readPage(url) })) },
     },
     {
+      path: '/v1/matches/:matchId/feedback',
+      methods: {
+        POST: mutation('rateMatch', 200, async request => {
+          const body = await readObject(request, ['useful'])
+          if (typeof body.useful !== 'boolean') throw new HttpError(400, 'invalid_request', 'useful must be a boolean', 'useful')
+          return { useful: body.useful }
+        }, ({ actorId, params }, input) => matches.rate(actorId, params.matchId, input.useful)),
+      },
+    },
+    {
       path: '/v1/matches/:matchId/intro-requests',
       methods: {
         POST: mutation('createIntroRequest', 201, async request => {

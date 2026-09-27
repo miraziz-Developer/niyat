@@ -65,6 +65,7 @@ const router = createApiRouter({
   outcomes: new ManageOutcomeVerifications(new PostgresOutcomeVerificationGateway(database)),
   safety: new ManageSafety(new PostgresSafetyGateway(database)),
   auth,
+  ready: async () => (await pool.query('SELECT 1')).rowCount === 1,
 })
 const { port, host } = config
 const devBootstrap = config.authMode === 'local' && !config.production
@@ -85,6 +86,7 @@ const jobs = [
 ]
 
 const server = createServer(async (incoming, outgoing) => {
+  const started = performance.now()
   try {
     const request = await toWebRequest(incoming)
     const url = new URL(request.url)
@@ -103,6 +105,7 @@ const server = createServer(async (incoming, outgoing) => {
       response = new Response(null, { status: 204, headers: { 'set-cookie': sessions.clearCookie() } })
     } else response = await router(request)
     await send(outgoing, response)
+    logRequest(request.method, url.pathname, response.status, started)
   } catch (error) {
     console.error(error)
     const problem = error instanceof HttpError ? error : new HttpError(500, 'internal_error', 'An unexpected error occurred')
@@ -112,6 +115,13 @@ const server = createServer(async (incoming, outgoing) => {
 
 server.listen(port, host, () => console.log(`NIYAT API listening on http://${host}:${port} (auth: ${config.authMode}${config.appOrigin ? `, magic links for ${config.appOrigin} via ${config.mail.transport}` : ''})`))
 for (const signal of ['SIGINT', 'SIGTERM'] as const) process.on(signal, () => { for (const job of jobs) job.stop(); server.close(() => pool.end().finally(() => process.exit(0))) })
+
+/** One JSON line per request; ids in paths are collapsed so logs aggregate by route and carry no identifiers. */
+function logRequest(method: string, pathname: string, status: number, started: number) {
+  if (pathname === '/v1/health' || pathname === '/v1/ready') return
+  const route = pathname.replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, ':id')
+  console.log(JSON.stringify({ level: status >= 500 ? 'error' : 'info', method, route, status, ms: Math.round(performance.now() - started) }))
+}
 
 async function toWebRequest(request: IncomingMessage): Promise<Request> {
   const origin = `http://${request.headers.host ?? `${host}:${port}`}`

@@ -181,6 +181,7 @@ function App({ data }: { data: AppData }) {
         onEdit={() => setScreen('create')}
         onExit={network ? signedOut : () => setScreen('home')}
         onSessionExpired={network ? () => setServer({ status: 'signed-out', notice: 'Sessiya tugadi. Davom etish uchun qayta kiring.' }) : undefined}
+        onProfileSaved={(profile) => setServer(current => current.status === 'ready' ? { ...current, profile } : current)}
       />
     )
   }

@@ -17,20 +17,21 @@ This checklist turns `PRODUCT_BLUEPRINT.md` into verifiable delivery units. `[~]
 ## Gate 2 — private alpha
 
 - [x] Auth/session boundary — invite-only email magic links (hashed single-use tokens, uniform responses, per-email and per-IP limits, Origin check, Secure cookies over HTTPS) on top of opaque, revocable PostgreSQL sessions + CSRF; production refuses the local bootstrap
-- [~] PostgreSQL — `pg` runtime, migration runner, reversible migrations, constraints, RLS and persistent self-hosted Docker deployment rehearsed on PostgreSQL 17; managed deployment/backup drill open
+- [x] PostgreSQL — `pg` runtime, migration runner, reversible migrations, constraints, RLS, persistent self-hosted Docker deployment, verified backups with rotation and a rehearsed restore (`scripts/backup.sh`, `scripts/restore.sh`); managed hosting optional
 - [x] Versioned REST/OpenAPI API — every v1 contract path is served by the declarative router (session, profile, intents, matches, intros, collaboration/outcome, trust signals, blocks, reports)
 - [x] Profile and intent CRUD — owner-scoped reads, keyset pagination, lifecycle transitions, idempotent mutations, history-preserving delete, and browser onboarding (profile + intent in one publish) in server mode
 - [~] Server-side matches — reciprocal scoring refreshed synchronously on intent create/update (≤500 candidates, ≤20 matches per intent), explained per viewer with limitations, identity hidden until consent; background worker/queue for scale open
-- [x] Intro lifecycle — create/accept/decline from the browser, counterpart read model, expired requests reported, one intro per match; persisted expiry sweeper open
+- [x] Intro lifecycle — create/accept/decline/cancel from the browser, counterpart read model, one intro per match, expiry persisted hourly by `run_maintenance()`
 - [x] Collaboration/outcome server slice — OpenAPI, reversible PostgreSQL migrations, runtime composition, browser adapter, authorization, durable replay and counterparty-only confirmation verified
 - [x] Single-host private-alpha Docker stack — Nginx frontend, Node API, PostgreSQL, migration/seed jobs and one-command bootstrap
 - [x] Atomic idempotency — replay record commits in the same transaction as the business change
+- [x] Operations — hourly maintenance, `/v1/ready` readiness probe used by Docker, structured request logs, request-id error logging
 - [x] Least-privilege runtime role — migrate job provisions `niyat_app` (NOBYPASSRLS, per-table grants, no DDL, audit INSERT-only); the API refuses to start in production as an RLS-bypassing role
-- [~] Block/report — block closes pending intros and hides the pair from matching; reports are audited and rate-limited (20/day); moderator review tooling open
-- [ ] Notifications and delivery preferences
+- [x] Block/report/moderation — block closes pending intros and hides the pair; reports are audited and rate-limited; moderators work a queue with private notes and can suspend (sessions revoked, member leaves matching)
+- [x] Notifications and delivery preferences — transactional outbox, leased background delivery with retries, per-member preferences, messages without names
 - [~] Invite-only cohort and 30–50 alpha users — invitation list and `npm run invite` tooling ready; recruiting the cohort open
-- [ ] Product analytics for publish activation and useful-match rating
-- [ ] Alpha privacy notice, terms, retention schedule and incident owner
+- [x] Product analytics for publish activation and useful-match rating — in-transaction events, match usefulness rating, `npm run metrics` against the exit targets
+- [~] Alpha privacy notice, terms, retention schedule and incident owner — drafts with the implemented retention table and versioned 18+/terms consent are live; legal review, contact email (`VITE_CONTACT_EMAIL`) and the named incident owner remain
 
 ## Authorization and safety invariants
 

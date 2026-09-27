@@ -1,6 +1,7 @@
 import { ApplicationError } from '../../../application/intros/intro-request'
 import { assertCounterpartyResolver, assertParticipant, type CollaborationDetail, type OutcomeVerificationGateway, type ServerCollaboration, type ServerMilestone, type ServerOutcomeVerification, type ServerTrustSignal, type VerificationResult } from '../../../application/outcomes/server-outcome-verification'
 import type { SqlDatabase, SqlExecutor } from '../ports'
+import { recordEvent } from './analytics'
 import { enqueueNotification } from './postgres-notifications'
 import { withActor, toIso, isUniqueViolation, required } from './actor-transaction'
 
@@ -28,6 +29,7 @@ export class PostgresOutcomeVerificationGateway implements OutcomeVerificationGa
           RETURNING id, intro_request_id, creator_id, counterparty_id, title, status, created_at`,
         [intro.id, command.actorId, counterpartyId, command.title])
         const collaboration = mapCollaboration(required(inserted.rows[0], 'collaboration'))
+        await recordEvent(transaction, command.actorId, 'collaboration_started')
         const milestones: ServerMilestone[] = []
         for (const [index, title] of command.milestones.entries()) {
           const result = await transaction.query<MilestoneRow>(`
@@ -116,6 +118,7 @@ export class PostgresOutcomeVerificationGateway implements OutcomeVerificationGa
           RETURNING id, collaboration_id, verification_id, subject_id, attester_id, label, issued_at`,
         [collaboration.id, command.verificationId, verificationRow.requester_id, command.actorId, collaboration.title])
         result.trustSignal = mapTrust(required(signal.rows[0], 'trust signal'))
+        await recordEvent(transaction, command.actorId, 'outcome_verified')
       }
       return result
     })

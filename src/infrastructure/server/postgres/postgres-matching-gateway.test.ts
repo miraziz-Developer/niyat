@@ -42,11 +42,12 @@ describe('PostgresMatchingGateway', () => {
       offers: ['design'], needs: ['engineering'], topics: ['ai'], mode: 'online', horizon: 'month', display_name: null, verification_level: 1,
       intro_id: null, intro_status: null, intro_sender_id: null,
     }
-    const db = database([ok, { rows: [{}], rowCount: 1 }, { rows: [row, { ...row, id: highIntent }], rowCount: 2 }, ok])
+    const db = database([ok, { rows: [{}], rowCount: 1 }, { rows: [row, { ...row, id: highIntent }], rowCount: 2 }, ok, ok])
     const page = await new PostgresMatchingGateway(db.value).list({ actorId, intentId: highIntent, limit: 1 })
     expect(page?.items[0]).toMatchObject({ score: 77, status: 'shown', youReceive: ['engineering'], theyReceive: ['design'], counterpart: { displayName: null } })
     expect(decodeMatchCursor(page?.page.nextCursor ?? '')).toEqual({ score: '77.00', id: lowIntent })
-    expect(db.query.mock.calls[3]).toEqual([expect.stringContaining("SET status = 'shown'"), [[lowIntent]]])
+    expect(db.query.mock.calls[3]).toEqual([expect.stringContaining('INSERT INTO analytics_events'), [actorId, 'matches_viewed', '{"count":1}']])
+    expect(db.query.mock.calls[4]).toEqual([expect.stringContaining("SET status = 'shown'"), [[lowIntent]]])
   })
 
   it('rejects cursors it did not issue', () => {

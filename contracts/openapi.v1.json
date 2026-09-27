@@ -1155,6 +1155,85 @@
           }
         }
       }
+    },
+    "/matches/{matchId}/feedback": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/MatchId"
+        }
+      ],
+      "post": {
+        "operationId": "rateMatch",
+        "description": "Useful-match rating used for the Gate 2 exit metric. Re-rating replaces the previous answer.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "useful"
+                ],
+                "properties": {
+                  "useful": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Recorded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "matchId",
+                    "useful"
+                  ],
+                  "properties": {
+                    "matchId": {
+                      "$ref": "#/components/schemas/Uuid"
+                    },
+                    "useful": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/ready": {
+      "get": {
+        "operationId": "getReadiness",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "API and database are available"
+          },
+          "503": {
+            "description": "Database unavailable"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2052,7 +2131,8 @@
           "reasons",
           "limitations",
           "counterpart",
-          "intro"
+          "intro",
+          "myFeedback"
         ],
         "properties": {
           "id": {
@@ -2139,6 +2219,13 @@
                 }
               }
             ]
+          },
+          "myFeedback": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "The viewer's own usefulness rating"
           }
         }
       },

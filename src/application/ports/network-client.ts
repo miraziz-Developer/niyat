@@ -25,6 +25,7 @@ export interface NetworkClient {
   updateIntent(intentId: string, input: IntentInput): Promise<ServerIntent>
   listMatches(intentId: string): Promise<ServerMatch[]>
   listIntroRequests(): Promise<ServerIntroRequest[]>
+  rateMatch(matchId: string, useful: boolean): Promise<void>
   createIntroRequest(matchId: string, scope: string, message: string): Promise<ServerIntroRequest>
   transitionIntroRequest(requestId: string, status: Extract<IntroRequestStatus, 'accepted' | 'declined' | 'cancelled'>): Promise<ServerIntroRequest>
   listCollaborations(): Promise<ServerCollaborationView[]>

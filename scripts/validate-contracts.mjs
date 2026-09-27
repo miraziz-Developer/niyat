@@ -4,6 +4,7 @@ const contract = JSON.parse(readFileSync(new URL('../contracts/openapi.v1.json',
 const migration = readFileSync(new URL('../db/migrations/0001_gate2_foundation.up.sql', import.meta.url), 'utf8')
 const introAuthorizationMigration = readFileSync(new URL('../db/migrations/0002_intro_authorization.up.sql', import.meta.url), 'utf8')
 const outcomeMigration = readFileSync(new URL('../db/migrations/0003_collaboration_outcomes.up.sql', import.meta.url), 'utf8')
+const operationsMigration = readFileSync(new URL('../db/migrations/0007_alpha_operations.up.sql', import.meta.url), 'utf8')
 const authMigration = readFileSync(new URL('../db/migrations/0006_invite_magic_link.up.sql', import.meta.url), 'utf8')
 const runtimeMigration = readFileSync(new URL('../db/migrations/0004_runtime_foundation.up.sql', import.meta.url), 'utf8')
 const matchingMigration = readFileSync(new URL('../db/migrations/0005_matching_safety.up.sql', import.meta.url), 'utf8')
@@ -46,6 +47,10 @@ for (const marker of ['ALTER TABLE matches ENABLE ROW LEVEL SECURITY', 'matches_
 
 for (const marker of ['CREATE TABLE invitations (', 'CREATE TABLE login_tokens (', 'token_hash text NOT NULL UNIQUE']) {
   if (!authMigration.includes(marker)) failures.push(`Auth migration marker missing: ${marker}`)
+}
+
+for (const marker of ['users_terms_pair', 'CREATE TABLE notification_outbox (', 'FUNCTION is_moderator()', 'report_decisions_moderator_all', 'candidate_owner.status = \'active\'', 'FUNCTION moderation_subject', 'WHERE public.is_moderator()', 'match_feedback_owner_all', 'FUNCTION run_maintenance()', 'maintenance must run without an actor', 'REVOKE ALL ON FUNCTION run_maintenance() FROM PUBLIC']) {
+  if (!operationsMigration.includes(marker)) failures.push(`Operations migration marker missing: ${marker}`)
 }
 
 visit(contract, value => {

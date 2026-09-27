@@ -1,6 +1,7 @@
 import { ApplicationError } from '../../../application/intros/intro-request'
 import { InvalidCursorError, type CreateIntentCommand, type IntentCommand, type IntentGateway, type IntentPage, type ListIntentsQuery, type ServerIntent, type UpdateIntentCommand } from '../../../application/intents/intent'
 import type { SqlDatabase } from '../ports'
+import { recordEvent } from './analytics'
 import { withActor, toIso } from './actor-transaction'
 
 type IntentRow = Record<string, unknown> & {
@@ -34,6 +35,7 @@ export class PostgresIntentGateway implements IntentGateway {
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, CASE WHEN $10::intent_status = 'draft' THEN NULL ELSE now() END)
         RETURNING ${columns}`,
       [actorId, input.title, input.outcome, input.offers, input.needs, input.topics, input.mode, input.horizon, input.visibility, input.status])
+      if (input.status === 'active') await recordEvent(transaction, actorId, 'intent_published')
       return mapIntent(result.rows[0])
     })
   }
@@ -49,7 +51,9 @@ export class PostgresIntentGateway implements IntentGateway {
     return withActor(this.database, actorId, async transaction => {
       const current = await transaction.query<IntentRow>(`SELECT ${columns} FROM intents WHERE id = $1 AND owner_id = $2 FOR UPDATE`, [intentId, actorId])
       if (!current.rows[0]) return null
-      assertTransition(mapIntent(current.rows[0]))
+      const previous = mapIntent(current.rows[0])
+      assertTransition(previous)
+      if (previous.status === 'draft' && input.status === 'active') await recordEvent(transaction, actorId, 'intent_published')
       const result = await transaction.query<IntentRow>(`
         UPDATE intents
         SET title = $3, outcome = $4, offers = $5, needs = $6, topics = $7, mode = $8, horizon = $9, visibility = $10, status = $11,

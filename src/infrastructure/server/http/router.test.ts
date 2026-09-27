@@ -36,7 +36,7 @@ function setup(overrides: { [K in keyof Gateways]?: Partial<Gateways[K]> } = {},
     consents: { get: vi.fn().mockResolvedValue({ adultConfirmed: true, termsVersion: currentTermsVersion, acceptedAt: '2030-01-01T00:00:00.000Z' }), accept: vi.fn(async (_actor, termsVersion) => ({ adultConfirmed: true, termsVersion, acceptedAt: '2030-01-01T00:00:00.000Z' })), ...overrides.consents },
     profiles: { find: vi.fn().mockResolvedValue(null), upsert: vi.fn(async command => ({ userId: command.actorId, displayName: command.displayName, bio: command.bio, languages: command.languages, verificationLevel: 1 })), ...overrides.profiles },
     intents: { create: vi.fn().mockResolvedValue(intent), find: vi.fn().mockResolvedValue(intent), update: vi.fn().mockResolvedValue(intent), remove: vi.fn().mockResolvedValue(true), list: vi.fn().mockResolvedValue({ items: [], page: { nextCursor: null } }), ...overrides.intents },
-    matches: { refresh: vi.fn().mockResolvedValue(true), list: vi.fn().mockResolvedValue({ items: [], page: { nextCursor: null } }), ...overrides.matches },
+    matches: { refresh: vi.fn().mockResolvedValue(true), list: vi.fn().mockResolvedValue({ items: [], page: { nextCursor: null } }), rate: vi.fn().mockResolvedValue(true), ...overrides.matches },
     intros: { create: vi.fn().mockResolvedValue({ id: resourceId }), transition: vi.fn(), list: vi.fn().mockResolvedValue([]), ...overrides.intros },
     outcomes: { createCollaboration: vi.fn().mockResolvedValue({ id: resourceId }), completeMilestone: vi.fn().mockResolvedValue({ id: resourceId }), requestVerification: vi.fn(), resolveVerification: vi.fn().mockResolvedValue({ verification: { id: resourceId } }), listTrustSignals: vi.fn().mockResolvedValue([]), listCollaborations: vi.fn().mockResolvedValue([]), ...overrides.outcomes },
     safety: { block: vi.fn().mockResolvedValue(true), report: vi.fn().mockResolvedValue({ id: resourceId, status: 'open' }), ...overrides.safety },
@@ -112,6 +112,11 @@ describe('API router: security boundary', () => {
     expect((await router(send('POST', '/v1/matches/not-a-uuid/intro-requests', { scope: 'Call', message: '' }))).status).toBe(400)
     await router(send('POST', `/v1/matches/${resourceId}/intro-requests`, { scope: ' Call ', message: 'Hi' }))
     expect(intros.create).toHaveBeenCalledWith({ actorId, matchId: resourceId, scope: 'Call', message: 'Hi' })
+  })
+
+  it('reports readiness from the database probe', async () => {
+    const { router } = setup()
+    expect((await router(get('/v1/ready'))).status).toBe(200)
   })
 
   it('answers unknown routes with 404 and unsupported methods with 405', async () => {
@@ -276,5 +281,16 @@ describe('API router: moderation', () => {
     expect((await router(send('PATCH', `/v1/moderation/reports/${resourceId}`, { status: 'dismissed', suspend: true }))).status).toBe(409)
     expect((await router(send('PATCH', `/v1/moderation/reports/${resourceId}`, { status: 'resolved', note: 'Spam', suspend: true }))).status).toBe(200)
     expect(moderation.decide).toHaveBeenCalledWith(actorId, resourceId, { status: 'resolved', note: 'Spam', suspend: true })
+  })
+})
+
+describe('API router: match feedback', () => {
+  it('records a boolean rating for a visible match', async () => {
+    const { router, matches } = setup({ matches: { rate: vi.fn().mockResolvedValueOnce(true).mockResolvedValueOnce(false) } })
+    const rated = await router(send('POST', `/v1/matches/${resourceId}/feedback`, { useful: true }))
+    expect(await rated.json()).toEqual({ matchId: resourceId, useful: true })
+    expect(matches.rate).toHaveBeenCalledWith(actorId, resourceId, true)
+    expect((await router(send('POST', `/v1/matches/${resourceId}/feedback`, { useful: false }))).status).toBe(404)
+    expect((await router(send('POST', `/v1/matches/${resourceId}/feedback`, { useful: 'yes' }))).status).toBe(400)
   })
 })

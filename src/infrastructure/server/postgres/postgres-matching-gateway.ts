@@ -3,6 +3,7 @@ import type { ListMatchesQuery, MatchingGateway, MatchPage, MatchStatus, ServerM
 import { explainPair, matchingModelVersion, selectMatches, type MatchableIntent, type PairEvidence } from '../../../domain/matching/score-intents'
 import type { SqlDatabase } from '../ports'
 import { withActor } from './actor-transaction'
+import { recordEvent } from './analytics'
 
 type SourceRow = Record<string, unknown> & MatchableIntent & { id: string }
 type CandidateRow = Record<string, unknown> & MatchableIntent & { id: string }
@@ -29,6 +30,7 @@ type MatchRow = Record<string, unknown> & {
   intro_id: string | null
   intro_status: string | null
   intro_sender_id: string | null
+  my_feedback: boolean | null
 }
 
 export class PostgresMatchingGateway implements MatchingGateway {
@@ -78,6 +80,10 @@ export class PostgresMatchingGateway implements MatchingGateway {
     })
   }
 
+  rate(actorId: string, matchId: string, useful: boolean): Promise<boolean> {
+    return rateMatch(this.database, actorId, matchId, useful)
+  }
+
   async list({ actorId, intentId, cursor, limit }: ListMatchesQuery): Promise<MatchPage | null> {
     const after = cursor === undefined ? null : decodeMatchCursor(cursor)
     return withActor(this.database, actorId, async transaction => {
@@ -86,7 +92,8 @@ export class PostgresMatchingGateway implements MatchingGateway {
       const result = await transaction.query<MatchRow>(`
         SELECT matches.id, matches.left_intent_id, matches.right_intent_id, matches.score, matches.score::text AS score_cursor,
                matches.explanation, matches.status, counterpart.*,
-               intro.id AS intro_id, intro.status::text AS intro_status, intro.sender_id AS intro_sender_id
+               intro.id AS intro_id, intro.status::text AS intro_status, intro.sender_id AS intro_sender_id,
+               (SELECT useful FROM match_feedback WHERE match_feedback.match_id = matches.id AND match_feedback.user_id = $5) AS my_feedback
         FROM matches
         CROSS JOIN LATERAL match_counterpart(matches.id) AS counterpart
         LEFT JOIN LATERAL (
@@ -99,9 +106,10 @@ export class PostgresMatchingGateway implements MatchingGateway {
           AND ($2::numeric IS NULL OR (matches.score, matches.id) < ($2::numeric, $3::uuid))
         ORDER BY matches.score DESC, matches.id DESC
         LIMIT $4`,
-      [intentId, after?.score ?? null, after?.id ?? null, limit + 1])
+      [intentId, after?.score ?? null, after?.id ?? null, limit + 1, actorId])
       const rows = result.rows.slice(0, limit)
       const unseen = rows.filter(row => row.status === 'candidate').map(row => row.id)
+      if (!after) await recordEvent(transaction, actorId, 'matches_viewed', { count: rows.length })
       if (unseen.length) await transaction.query(`UPDATE matches SET status = 'shown', updated_at = now() WHERE id = ANY($1::uuid[]) AND status = 'candidate'`, [unseen])
       const last = rows.at(-1)
       return {
@@ -110,6 +118,19 @@ export class PostgresMatchingGateway implements MatchingGateway {
       }
     })
   }
+}
+
+export async function rateMatch(database: SqlDatabase, actorId: string, matchId: string, useful: boolean): Promise<boolean> {
+  return withActor(database, actorId, async transaction => {
+    // matches RLS admits only participants, so an invisible match reads as missing.
+    const visible = await transaction.query(`SELECT 1 FROM matches WHERE id = $1`, [matchId])
+    if (!visible.rows[0]) return false
+    await transaction.query(`
+      INSERT INTO match_feedback (match_id, user_id, useful) VALUES ($1, $2, $3)
+      ON CONFLICT (match_id, user_id) DO UPDATE SET useful = EXCLUDED.useful, updated_at = now()`, [matchId, actorId, useful])
+    await recordEvent(transaction, actorId, 'match_rated', { useful })
+    return true
+  })
 }
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
@@ -145,6 +166,7 @@ function mapMatch(row: MatchRow, actorId: string): ServerMatch {
       verificationLevel: Number(row.verification_level),
       intent: { id: row.intent_id, title: row.title, outcome: row.outcome, offers: row.offers, needs: row.needs, topics: row.topics, mode: row.mode, horizon: row.horizon },
     },
+    myFeedback: row.my_feedback ?? null,
     intro: row.intro_id && row.intro_status
       ? { id: row.intro_id, status: row.intro_status, direction: row.intro_sender_id === actorId ? 'outgoing' : 'incoming' }
       : null,

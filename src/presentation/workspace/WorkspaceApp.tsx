@@ -4,6 +4,7 @@ import { rankMatches } from '../../application/matching/rank-matches'
 import { requestOutcomeVerification, resolveOutcomeVerification } from '../../application/outcomes/manage-outcome-verification'
 import { createIntroRequest, transitionIntroRequest } from '../../application/requests/manage-intro-request'
 import type { NotificationPreferences } from '../../application/notifications/notifications'
+import type { ServerProfile } from '../../application/profiles/profile'
 import { NetworkError } from '../../application/ports/network-client'
 import type { Circle, Collaboration, Intent, IntroRequest, Match, OutcomeVerification, Person, TrustSignal } from '../../domain/model/entities'
 import type { Viewer } from '../app.types'
@@ -34,13 +35,15 @@ type ProductAppProps = {
   onExit: () => void
   /** Server mode: called when the API reports the session is gone, so the app can return to sign-in. */
   onSessionExpired?: () => void
+  /** Server mode: lets the shell show the new name after a profile edit. */
+  onProfileSaved?: (profile: ServerProfile) => void
 }
 
 type ServerStatus = 'local' | 'loading' | 'connected' | 'error'
 
 const defaultMilestones = ['Birinchi uchrashuvni o‘tkazish', 'Keyingi amaliy qadamni yakunlash']
 
-export default function ProductApp({ intent, server, viewer, data, onEdit, onExit, onSessionExpired }: ProductAppProps) {
+export default function ProductApp({ intent, server, viewer, data, onEdit, onExit, onSessionExpired, onProfileSaved }: ProductAppProps) {
   const network = useNetwork()
   const local = network === null
   const [section, setSection] = useState<WorkspaceSection>('today')
@@ -144,6 +147,20 @@ export default function ProductApp({ intent, server, viewer, data, onEdit, onExi
     showNotice('Foydalanuvchi bloklandi')
   }
 
+  async function rateMatch(match: Match, useful: boolean) {
+    if (!network || !match.matchId) return
+    const matchId = match.matchId
+    try {
+      await network.rateMatch(matchId, useful)
+      // Local update only: a rating changes nothing else in the read model.
+      setServerMatches(current => current.map(item => item.matchId === matchId ? { ...item, feedback: useful } : item))
+      setActiveMatch(current => current && current.matchId === matchId ? { ...current, feedback: useful } : current)
+      showNotice('Rahmat — baho match sifatini yaxshilashga yordam beradi')
+    } catch (error) {
+      if (!failed(error)) showNotice(describeError(error), 'error')
+    }
+  }
+
   async function reportPerson(person: Person, reason: string) {
     if (network) { await onServer(() => network.report('user', person.id, reason), 'Shikoyat moderatorga yuborildi'); return }
     showNotice('Shikoyat qabul qilindi (demo)')
@@ -237,11 +254,11 @@ export default function ProductApp({ intent, server, viewer, data, onEdit, onExi
           {!loading && section === 'circles' && <CirclesView circles={local ? data.circles : []} joined={joined} onJoin={(circle) => { setJoined((current) => current.includes(circle.id) ? current : [...current, circle.id]); showNotice(`“${circle.title}” doirasiga qo‘shilding`) }} />}
           {!loading && section === 'progress' && <ProgressView collaborations={collaborations} verifications={verifications} findPerson={findPerson} local={local} busy={busy} onCompleteMilestone={finishMilestone} onSubmitOutcome={submitOutcome} onResolveOutcome={resolveOutcome} onRequests={() => navigate('requests')} />}
           {!loading && section === 'moderation' && network && server?.moderator && <ModerationView network={network} notify={showNotice} />}
-          {!loading && section === 'trust' && <TrustView viewer={viewer} local={local} actorId={actorId} trustSignals={trustSignals} findPerson={findPerson} onSignOut={signOut} />}
+          {!loading && section === 'trust' && <TrustView viewer={viewer} local={local} actorId={actorId} trustSignals={trustSignals} findPerson={findPerson} onSignOut={signOut} onProfileSaved={(profile) => { onProfileSaved?.(profile); showNotice('Profil saqlandi') }} />}
         </main>
       </div>
 
-      {activeMatch && <MatchDrawer key={activeMatch.matchId ?? activeMatch.person.id} match={activeMatch} alreadySent={hasOutgoingRequest(activeMatch)} busy={busy} onRequest={(scope, message) => createRequest(activeMatch, scope, message)} onBlock={() => blockPerson(activeMatch.person)} onReport={(reason) => reportPerson(activeMatch.person, reason)} onClose={() => setActiveMatch(null)} />}
+      {activeMatch && <MatchDrawer key={activeMatch.matchId ?? activeMatch.person.id} match={activeMatch} alreadySent={hasOutgoingRequest(activeMatch)} busy={busy} onRequest={(scope, message) => createRequest(activeMatch, scope, message)} onBlock={() => blockPerson(activeMatch.person)} onReport={(reason) => reportPerson(activeMatch.person, reason)} onRate={activeMatch.matchId ? (useful) => void rateMatch(activeMatch, useful) : undefined} onClose={() => setActiveMatch(null)} />}
       <div aria-live="polite" aria-atomic="true">{notice && <div className={`toast${notice.tone === 'error' ? ' error' : ''}`} role={notice.tone === 'error' ? 'alert' : 'status'}><span aria-hidden="true">{notice.tone === 'error' ? '!' : '✓'}</span>{notice.message}</div>}</div>
     </div>
   )
@@ -357,13 +374,13 @@ function CollaborationCard({ collaboration, verification, person, local, busy, o
 
 type PrivacySettings = { matchedOnly: boolean; aiDrafts: boolean; activity: boolean; analytics: boolean }
 
-function TrustView({ viewer, local, actorId, trustSignals, findPerson, onSignOut }: { viewer: Viewer; local: boolean; actorId: string; trustSignals: TrustSignal[]; findPerson: (id: string) => Person; onSignOut: () => void }) {
+function TrustView({ viewer, local, actorId, trustSignals, findPerson, onSignOut, onProfileSaved }: { viewer: Viewer; local: boolean; actorId: string; trustSignals: TrustSignal[]; findPerson: (id: string) => Person; onSignOut: () => void; onProfileSaved: (profile: ServerProfile) => void }) {
   const [settings, setSettings] = usePersistentState<PrivacySettings>(storageKeys.privacySettings, { matchedOnly: true, aiDrafts: true, activity: false, analytics: true })
   const [confirmExit, setConfirmExit] = useState(false)
   const toggle = (key: keyof PrivacySettings) => setSettings(current => ({ ...current, [key]: !current[key] }))
   return <section className="product-view"><SectionTitle code="Maxfiylik · ruxsatlar · xavfsizlik" title="Ma’lumoting — seniki." description="Kim nimani ko‘rishi va AI nima qilishi mumkinligini shu yerdan boshqarasan." />
     <div className="trust-grid">
-      <div className="panel"><div className="panel-title"><span>Identitet</span>{viewer.verified && <small className="verified">✓ Tasdiqlangan</small>}</div><div className="identity-row"><span className="profile-big" aria-hidden="true">{viewer.name[0]?.toUpperCase()}</span><div><h3>{viewer.name}</h3><p>{local ? 'Local demo · ma’lumot faqat shu brauzerda' : `Private alpha sessiyasi · ${actorId.slice(0, 8)}`}</p></div></div><p className="panel-note">Ismingiz match’larda yashirin turadi va faqat intro qabul qilingach ochiladi.</p></div>
+      <div className="panel"><div className="panel-title"><span>Identitet</span>{viewer.verified && <small className="verified">✓ Tasdiqlangan</small>}</div><div className="identity-row"><span className="profile-big" aria-hidden="true">{viewer.name[0]?.toUpperCase()}</span><div><h3>{viewer.name}</h3><p>{local ? 'Local demo · ma’lumot faqat shu brauzerda' : `Private alpha sessiyasi · ${actorId.slice(0, 8)}`}</p></div></div><p className="panel-note">Ismingiz match’larda yashirin turadi va faqat intro qabul qilingach ochiladi.</p>{!local && <ProfileEditor onSaved={onProfileSaved} />}</div>
       <div className="panel"><div className="panel-title"><span>Ruxsatlar</span><small>Shu qurilmada</small></div><Toggle label="Faqat matchlar profilimni ko‘rsin" active={settings.matchedOnly} onClick={() => toggle('matchedOnly')} /><Toggle label="AI faqat draft tayyorlasin" active={settings.aiDrafts} onClick={() => toggle('aiDrafts')} /><Toggle label="Faollik holatini ko‘rsatish" active={settings.activity} onClick={() => toggle('activity')} /><Toggle label="Anonim product analytics" active={settings.analytics} onClick={() => toggle('analytics')} /></div>
       {!local && <NotificationPanel />}
       <div className="panel wide trust-signals"><div className="panel-title"><span>Tasdiqlangan natijalar</span><small>{trustSignals.length} signal</small></div>{trustSignals.length === 0 ? <p className="trust-empty">Hamkor tasdiqlagan natijalar shu yerda paydo bo‘ladi. Signal faqat ikki tomon qaroridan keyin yaratiladi.</p> : trustSignals.map(signal => <div className="trust-signal" key={signal.id}><i aria-hidden="true">✓</i><div><b>{signal.label}</b><span>{findPerson(signal.personId).name} tasdiqladi · {formatShortDate(signal.issuedAt)}</span></div></div>)}</div>
@@ -403,4 +420,46 @@ function NotificationPanel() {
     {error && <p className="form-error" role="alert">{error}</p>}
     <p className="panel-note">Xatlarda hech kimning ismi yozilmaydi — tafsilotlar faqat ilova ichida.</p>
   </div>
+}
+
+function ProfileEditor({ onSaved }: { onSaved: (profile: ServerProfile) => void }) {
+  const network = useNetwork()
+  const [profile, setProfile] = useState<ServerProfile | null>(null)
+  const [editing, setEditing] = useState(false)
+  const [name, setName] = useState('')
+  const [bio, setBio] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  async function open() {
+    if (!network) return
+    setError('')
+    try {
+      const current = profile ?? (await network.connect()).profile
+      setProfile(current)
+      setName(current?.displayName ?? '')
+      setBio(current?.bio ?? '')
+      setEditing(true)
+    } catch (caught) { setError(describeError(caught)) }
+  }
+
+  async function save() {
+    if (!network || !name.trim()) return
+    setSaving(true)
+    setError('')
+    try {
+      const saved = await network.saveProfile({ displayName: name.trim(), bio: bio.trim(), languages: profile?.languages ?? ['uz'] })
+      setProfile(saved)
+      setEditing(false)
+      onSaved(saved)
+    } catch (caught) { setError(describeError(caught)) } finally { setSaving(false) }
+  }
+
+  if (!editing) return <><button className="quiet-button full" onClick={() => void open()}>Profilni tahrirlash</button>{error && <p className="form-error" role="alert">{error}</p>}</>
+  return <form className="profile-editor" onSubmit={(event) => { event.preventDefault(); void save() }}>
+    <label className="field"><span>Ism<small>Faqat rozilikdan keyin ko‘rinadi</small></span><input value={name} maxLength={80} onChange={(event) => setName(event.target.value)} /></label>
+    <label className="field"><span>Qisqa bio<small>Ixtiyoriy</small></span><textarea value={bio} maxLength={1000} onChange={(event) => setBio(event.target.value)} placeholder="Nima bilan shug‘ullanasiz, qanday tajribangiz bor…" /></label>
+    {error && <p className="form-error" role="alert">{error}</p>}
+    <div className="data-actions"><button className="primary" disabled={saving || !name.trim()}>{saving ? 'Saqlanmoqda…' : 'Saqlash'}</button><button type="button" className="ghost-button" onClick={() => setEditing(false)}>Bekor qilish</button></div>
+  </form>
 }

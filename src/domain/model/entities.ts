@@ -32,6 +32,7 @@ export type Match = {
   matchId?: string
   limitations?: string[]
   introId?: string
+  feedback?: boolean | null
 }
 
 export type IntroRequest = {

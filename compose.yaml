@@ -66,7 +66,8 @@ services:
       postgres:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "node", "-e", "const s=require('node:net').connect(3000,'127.0.0.1',()=>{s.end();process.exit(0)});s.on('error',()=>process.exit(1))"]
+      # Readiness includes a database round trip, so a lost PostgreSQL connection marks the API unhealthy.
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/v1/ready').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -80,6 +81,7 @@ services:
         VITE_API_MODE: server
         # No colon: an explicitly empty value (email sign-in) must stay empty instead of falling back to the demo user.
         VITE_DEV_USER_ID: ${VITE_DEV_USER_ID-00000000-0000-4000-8000-000000000001}
+        VITE_CONTACT_EMAIL: ${VITE_CONTACT_EMAIL:-}
     restart: unless-stopped
     ports:
       - "${NIYAT_HTTP_PORT:-8080}:80"

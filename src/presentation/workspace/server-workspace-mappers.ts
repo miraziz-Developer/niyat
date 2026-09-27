@@ -47,6 +47,7 @@ export function mapServerMatch(value: ServerMatch, viewerIntentTitle: string): M
     youReceive: value.youReceive,
     theyReceive: value.theyReceive,
     matchId: value.id,
+    feedback: value.myFeedback,
     ...(value.intro ? { introId: value.intro.id } : {}),
     opening: `Salom. “${viewerIntentTitle}” ustida ishlayapman. Sizning “${person.intent.title}” niyatingiz bilan o‘zaro foydali nuqta ko‘rdim. 15 daqiqa fikr almashamizmi?`,
   }

@@ -629,3 +629,8 @@ p { margin: 0; }
 .report-details { color: var(--text-2); font-size: var(--fs-small); border-left: 3px solid var(--warn-line); padding-left: 12px; }
 .report-history { margin: 0; padding-left: 18px; color: var(--text-3); font-size: var(--fs-meta); display: grid; gap: 4px; }
 .report-actions { display: grid; gap: 12px; border-top: 1px solid var(--line); padding-top: 14px; }
+.feedback-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 22px; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-2); }
+.feedback-row > span { flex: 1 1 160px; font-size: var(--fs-small); color: var(--text); font-weight: 600; }
+.feedback-row button { min-height: 36px; border: 1px solid var(--line-strong); border-radius: var(--radius-pill); background: none; color: var(--text-2); padding: 0 14px; font-size: var(--fs-meta); font-weight: 600; }
+.feedback-row button.active { background: var(--accent-soft); border-color: var(--accent-line); color: var(--accent-text); }
+.profile-editor { display: grid; gap: 14px; margin-top: 8px; }

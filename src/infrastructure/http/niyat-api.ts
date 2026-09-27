@@ -50,6 +50,7 @@ export class NiyatApi implements NetworkClient {
   updateIntent(intentId: string, input: IntentInput) { return this.mutate<ServerIntent>(`/intents/${intentId}`, 'PATCH', input) }
   listMatches(intentId: string) { return this.all<ServerMatch>(`/intents/${intentId}/matches`) }
   async listIntroRequests() { return (await this.request<Page<ServerIntroRequest>>('/intro-requests')).items }
+  async rateMatch(matchId: string, useful: boolean) { await this.mutate(`/matches/${matchId}/feedback`, 'POST', { useful }) }
   createIntroRequest(matchId: string, scope: string, message: string) { return this.mutate<ServerIntroRequest>(`/matches/${matchId}/intro-requests`, 'POST', { scope, message }) }
   transitionIntroRequest(requestId: string, status: 'accepted' | 'declined' | 'cancelled') { return this.mutate<ServerIntroRequest>(`/intro-requests/${requestId}`, 'PATCH', { status }) }
   async listCollaborations() { return (await this.request<Page<ServerCollaborationView>>('/me/collaborations')).items }

@@ -9,7 +9,8 @@ const receiverId = '00000000-0000-4000-8000-000000000003'
 const introId = '00000000-0000-4000-8000-000000000004'
 
 function database(results: SqlResult<Record<string, unknown>>[]) {
-  const query = vi.fn(async (_text: string, _values?: readonly unknown[]) => results.shift() ?? { rows: [], rowCount: 0 })
+  // Analytics inserts are fire-and-record side effects; they do not consume scripted results.
+  const query = vi.fn(async (text: string, _values?: readonly unknown[]) => text.includes('INSERT INTO analytics_events') ? { rows: [], rowCount: 1 } : results.shift() ?? { rows: [], rowCount: 0 })
   const value: SqlDatabase = { transaction: work => work({ query } as SqlExecutor) }
   return { value, query }
 }
@@ -32,6 +33,7 @@ describe('PostgresIntroRequestGateway', () => {
     expect(db.query.mock.calls[2][1]).toEqual([matchId, actorId, receiverId, 'Call', ''])
     expect(db.query.mock.calls[3][0]).toContain("status = 'intro_requested'")
     expect(db.query.mock.calls[4]).toEqual([expect.stringContaining('INSERT INTO notification_outbox'), [receiverId, 'intro_requested', introId]])
+    expect(db.query.mock.calls[5]).toEqual([expect.stringContaining('INSERT INTO analytics_events'), [actorId, 'intro_requested', '{}']])
   })
 
   it('denies creation when the authorization function returns no receiver', async () => {

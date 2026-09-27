@@ -1,5 +1,6 @@
 import type { IssueResult, MagicLinkGateway } from '../../../application/auth/magic-link'
 import type { SqlDatabase } from '../ports'
+import { recordEvent } from './analytics'
 
 type ConsumedRow = Record<string, unknown> & { email_normalized: string }
 type UserRow = Record<string, unknown> & { user_id: string; status: string }
@@ -44,6 +45,7 @@ export class PostgresMagicLinkGateway implements MagicLinkGateway {
       if (existing.rows[0]) {
         if (existing.rows[0].status !== 'active') return null
         await transaction.query(`UPDATE auth_identities SET last_authenticated_at = now() WHERE provider = 'email' AND provider_subject = $1`, [email])
+        await recordEvent(transaction, existing.rows[0].user_id, 'signed_in', { first: false })
         return { userId: existing.rows[0].user_id }
       }
 
@@ -57,6 +59,7 @@ export class PostgresMagicLinkGateway implements MagicLinkGateway {
       await transaction.query(`UPDATE invitations SET accepted_user_id = $1, accepted_at = now() WHERE email_normalized = $2`, [userId, email])
       await transaction.query(`
         INSERT INTO audit_events (actor_id, action, resource_type, resource_id) VALUES ($1, 'account.created', 'user', $1)`, [userId])
+      await recordEvent(transaction, userId, 'signed_in', { first: true })
       return { userId }
     })
   }

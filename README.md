@@ -60,6 +60,20 @@ docker compose run --rm migrate npm run invite -- --revoke bobur@example.uz
 
 Himoya: javob email ro‘yxatda bor-yo‘qligidan qat’i nazar bir xil; token bazada faqat SHA-256 sifatida saqlanadi; havola bir marta ishlaydi va boshqa ochiq havolalarni bekor qiladi; email bo‘yicha soatiga 5 ta, IP bo‘yicha 10 daqiqada 20 ta urinish; sign-in POST faqat `APP_ORIGIN`dan qabul qilinadi; HTTPS’da cookie `Secure`. Havola tasdig‘i GET emas, frontend yuboradigan POST — pochta skanerlari havolani oldindan ochib tokenni ishlatib yubora olmaydi. Development’da `RESEND_API_KEY` bo‘lmasa havola API logiga chiqariladi.
 
+### Alpha’ni boshqarish
+
+Hamma buyruqlar owner rolida ishlaydi (`docker compose run --rm migrate npm run …` yoki `DATABASE_URL=… npm run …`):
+
+| Vazifa | Buyruq |
+| --- | --- |
+| Odamni taklif qilish / bekor qilish | `npm run invite -- a@b.uz` · `npm run invite -- --revoke a@b.uz` · `--list` |
+| Moderator tayinlash (a’zo bir marta kirgan bo‘lishi kerak) | `npm run staff -- --grant moderator a@b.uz` · `--revoke` · `--list` |
+| Gate 2 ko‘rsatkichlari | `npm run metrics` yoki oxirgi 30 kun: `npm run metrics -- 30` |
+| Backup (tekshiriladi, oxirgi 14 tasi saqlanadi) | `./scripts/backup.sh` — cron: `15 3 * * * cd /srv/niyat && ./scripts/backup.sh` |
+| Restore (tasdiq so‘raydi, API’ni to‘xtatib turadi, grantlarni tiklaydi) | `./scripts/restore.sh .local/backups/niyat-….dump` |
+
+API o‘zi fon ishlarini yuritadi: har soatda `run_maintenance()` (muddati o‘tgan intro’larni yopadi, eski login token, sessiya, idempotency va bildirishnoma yozuvlarini o‘chiradi) va har 30 soniyada bildirishnoma navbati (`APP_ORIGIN` berilganda). Monitoring: `GET /v1/health` (jarayon tirik), `GET /v1/ready` (database javob beradi, Docker healthcheck shuni ishlatadi); har so‘rov uchun bitta JSON log qatori (ID’lar `:id` bilan almashtiriladi); kutilmagan xatolar foydalanuvchiga qaytgan `requestId` bilan loglanadi.
+
 ### Lokal frontend development
 
 ```bash
@@ -151,6 +165,11 @@ Foydalanuvchi “nima bera olaman / menga nima kerak” formatida niyat yaratadi
 - Server-side reciprocal matching: har tomon uchun alohida tushuntirish va cheklovlar; ism faqat intro qabul qilingach ochiladi; maxfiy niyatlar match bo‘lmaydi
 - Block (kutilayotgan intro’larni yopadi va juftlikni yashiradi) va audit qilinadigan, kunlik limitli shikoyat navbati
 - Idempotency record biznes o‘zgarishi bilan bitta tranzaksiyada commit qilinadi
+- 18+ tasdig‘i va versiyalangan shartlar roziligi (qabul qilinmaguncha mutatsiyalar yopiq); `/maxfiylik` va `/shartlar` qoralama sahifalari saqlash muddatlari jadvali bilan
+- Email bildirishnomalar (outbox, qayta urinish, a’zo sozlamalari; xatlarda ism yo‘q)
+- Moderatsiya paneli: shikoyatlar navbati, faqat moderatorlar ko‘radigan izohlar, a’zoni to‘xtatish (sessiyalar darhol yopiladi, match’lardan chiqadi)
+- Match “foydalimi?” bahosi, birinchi tomon analytics hodisalari va `npm run metrics`
+- Backup/restore skriptlari (restore mashqi sinovdan o‘tgan), avtomatik texnik xizmat, readiness endpoint va strukturali loglar
 - Chromium responsive E2E, server-mode brauzer oqimi va axe accessibility testlari
 - Token asosidagi dizayn tizimi: o‘qiladigan shrift shkalasi (min 11–12px), ko‘rinadigan klaviatura fokusi, 44px teginish maydonlari, WCAG AA kontrast, `prefers-reduced-motion`
 - UX: chip ko‘rinishidagi teg kiritish, format/muddat tanlovi, e’lon qilishdan oldin nima qolganini ko‘rsatuvchi ro‘yxat, tahrirlanadigan intro xabari, bloklash/chiqish tasdig‘i, yuklanish skeletlari va o‘zbekcha xato xabarlari
@@ -166,4 +185,4 @@ Bu hali production ijtimoiy tarmoq emas. Backend qurishdan oldin 30–50 foydala
 
 Default UI local-first demo bo‘lib qoladi. `VITE_API_MODE=server` rejimida butun workspace serverdan ishlaydi va brauzer storage’iga server ma’lumoti yozilmaydi; requester o‘z natijasini tasdiqlay olmaydi, qarorni faqat hamkor o‘z sessiyasidan beradi. Local demo’dagi counterparty tugmasi faqat prototip simulyatsiyasidir. Circles hozircha faqat demo’da.
 
-Keyingi bosqich: matching uchun background worker, notification va moderator vositalari, analytics va deployment observability. DID/blockchain MVP uchun ataylab qo‘shilmadi.
+Keyingi bosqich: kohortani yig‘ish, huquqiy matnlarni yakunlash, keyin katta hajm uchun matching worker va tashqi monitoring (xatolar/metrikalar xizmati). DID/blockchain MVP uchun ataylab qo‘shilmadi.

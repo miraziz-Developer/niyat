@@ -31,6 +31,8 @@ type DrawerProps = {
   onRequest: (scope: string, message: string) => void
   onBlock: () => void
   onReport: (reason: string) => void
+  /** Server mode only: records whether the match was useful. */
+  onRate?: (useful: boolean) => void
   onClose: () => void
 }
 
@@ -40,7 +42,7 @@ const reportReasons = [
   { code: 'inappropriate', label: 'Nomaqbul kontent' },
 ]
 
-export function MatchDrawer({ match, alreadySent, busy, onRequest, onBlock, onReport, onClose }: DrawerProps) {
+export function MatchDrawer({ match, alreadySent, busy, onRequest, onBlock, onReport, onRate, onClose }: DrawerProps) {
   const [scope, setScope] = useState<string>(introScopes[0])
   const [message, setMessage] = useState(match.opening)
   const [confirm, setConfirm] = useState<'none' | 'block' | 'report'>('none')
@@ -62,6 +64,14 @@ export function MatchDrawer({ match, alreadySent, busy, onRequest, onBlock, onRe
         <div className="drawer-section">
           <h4>E’tibor bering</h4>
           <div className="limitation-list">{match.limitations.map((limitation) => <span key={limitation}>△ {limitation}</span>)}</div>
+        </div>
+      )}
+
+      {onRate && (
+        <div className="feedback-row" role="group" aria-label="Bu kesishma foydalimi?">
+          <span>Bu kesishma foydalimi?</span>
+          <button aria-pressed={match.feedback === true} className={match.feedback === true ? 'active' : ''} onClick={() => onRate(true)}>Ha, foydali</button>
+          <button aria-pressed={match.feedback === false} className={match.feedback === false ? 'active' : ''} onClick={() => onRate(false)}>Yo‘q</button>
         </div>
       )}
 

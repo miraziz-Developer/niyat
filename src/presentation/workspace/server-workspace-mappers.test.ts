@@ -11,8 +11,8 @@ describe('server workspace mappers', () => {
   })
 
   it('carries match id, limitations and existing intro into the view model', () => {
-    const match: ServerMatch = { id: 'match', leftIntentId: 'a', rightIntentId: 'b', score: 77.4, status: 'shown', youReceive: ['design'], theyReceive: ['engineering'], reasons: ['Ishlash formati mos'], limitations: ['Umumiy mavzu topilmadi'], counterpart, intro: { id: 'intro', status: 'pending', direction: 'outgoing' } }
-    expect(mapServerMatch(match, 'Builder')).toMatchObject({ matchId: 'match', introId: 'intro', score: 77, limitations: ['Umumiy mavzu topilmadi'] })
+    const match: ServerMatch = { id: 'match', leftIntentId: 'a', rightIntentId: 'b', score: 77.4, status: 'shown', youReceive: ['design'], theyReceive: ['engineering'], reasons: ['Ishlash formati mos'], limitations: ['Umumiy mavzu topilmadi'], counterpart, intro: { id: 'intro', status: 'pending', direction: 'outgoing' }, myFeedback: true }
+    expect(mapServerMatch(match, 'Builder')).toMatchObject({ matchId: 'match', introId: 'intro', score: 77, limitations: ['Umumiy mavzu topilmadi'], feedback: true })
   })
 
   it('maps intro direction and folds terminal statuses into declined', () => {
