@@ -54,6 +54,12 @@ services:
       DATABASE_POOL_SIZE: ${DATABASE_POOL_SIZE:-10}
       NODE_ENV: ${NIYAT_NODE_ENV:-development}
       AUTH_MODE: ${AUTH_MODE:-local}
+      # Invite-only magic-link sign-in: set APP_ORIGIN to the public https URL plus the mail settings.
+      APP_ORIGIN: ${APP_ORIGIN:-}
+      MAIL_FROM: ${MAIL_FROM:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      # Nginx sets X-Real-IP; sign-in rate limits key on it.
+      TRUST_PROXY: "true"
       HOST: 0.0.0.0
       PORT: 3000
     depends_on:
@@ -72,7 +78,8 @@ services:
       target: web
       args:
         VITE_API_MODE: server
-        VITE_DEV_USER_ID: ${VITE_DEV_USER_ID:-00000000-0000-4000-8000-000000000001}
+        # No colon: an explicitly empty value (email sign-in) must stay empty instead of falling back to the demo user.
+        VITE_DEV_USER_ID: ${VITE_DEV_USER_ID-00000000-0000-4000-8000-000000000001}
     restart: unless-stopped
     ports:
       - "${NIYAT_HTTP_PORT:-8080}:80"

@@ -1,12 +1,13 @@
 import { createHash, randomBytes } from 'node:crypto'
 import type { Pool } from 'pg'
-import type { Session, SessionResolver } from '../ports'
+import type { CreatedSession, Session, SessionResolver } from '../ports'
 
 const cookieName = 'niyat_session'
 type SessionRow = { user_id: string; csrf_token: string; expires_at: Date | string }
 
 export class PostgresSessionResolver implements SessionResolver {
-  constructor(private readonly pool: Pool) {}
+  /** `secure` adds the Secure cookie attribute; it must be on whenever the app is served over HTTPS. */
+  constructor(private readonly pool: Pool, private readonly options: { secure: boolean } = { secure: false }) {}
 
   async resolve(request: Request): Promise<Session | null> {
     const token = readCookie(request.headers.get('cookie') ?? '', cookieName)
@@ -19,15 +20,19 @@ export class PostgresSessionResolver implements SessionResolver {
     return row ? { userId: row.user_id, csrfToken: row.csrf_token, expiresAt: new Date(row.expires_at).toISOString() } : null
   }
 
-  async createLocalSession(userId: string): Promise<{ session: Session; cookie: string }> {
+  async create(userId: string): Promise<CreatedSession> {
     const token = randomBytes(32).toString('base64url')
     const csrfToken = randomBytes(32).toString('base64url')
     const expiresAt = new Date(Date.now() + 12 * 60 * 60 * 1000)
     await this.pool.query('INSERT INTO sessions (user_id, token_hash, csrf_token, expires_at) VALUES ($1, $2, $3, $4)', [userId, hash(token), csrfToken, expiresAt])
     return {
       session: { userId, csrfToken, expiresAt: expiresAt.toISOString() },
-      cookie: `${cookieName}=${encodeURIComponent(token)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=43200`,
+      cookie: `${cookieName}=${encodeURIComponent(token)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=43200${this.options.secure ? '; Secure' : ''}`,
     }
+  }
+
+  clearCookie(): string {
+    return `${cookieName}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${this.options.secure ? '; Secure' : ''}`
   }
 
   async revoke(request: Request): Promise<void> {

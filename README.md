@@ -36,7 +36,29 @@ Migration jadval egasi sifatida bajariladi, API esa alohida `niyat_app` roli bil
 
 PostgreSQL internetga ochilmaydi; u faqat `127.0.0.1:55432` va ichki Docker network’da mavjud. Persistent data `.local/postgres/` ichida qoladi. Server backup’i `pg_dump` bilan olinishi kerak.
 
-> **Xavfsizlik:** avtomatik bootstrap `AUTH_MODE=local` private alpha uchun. Production identity provider ulanmaguncha `8080` portni ochiq internetga qo‘ymang; firewall yoki VPN bilan cheklang. `NODE_ENV=production` bilan local auth server tomonidan rad etiladi.
+> **Xavfsizlik:** default `AUTH_MODE=local` brauzerni avtomatik demo foydalanuvchi sifatida kiritadi — bu faqat yopiq sinov uchun. Serverni internetga ochishdan oldin quyidagi taklif asosidagi email kirishni yoqing. `NODE_ENV=production` bilan local auth server tomonidan rad etiladi.
+
+### Taklif asosidagi email kirish (magic link)
+
+Private alpha faqat taklif bilan ishlaydi: parol yo‘q, taklif qilingan emailga 15 daqiqa amal qiladigan bir martalik kirish havolasi yuboriladi. `.env` da:
+
+```bash
+AUTH_MODE=email
+APP_ORIGIN=https://niyat.example.uz      # brauzer ochadigan manzil; production’da https majburiy
+MAIL_FROM='NIYAT <kirish@niyat.example.uz>'
+RESEND_API_KEY=re_...                    # faqat server .env ida
+VITE_DEV_USER_ID=                        # bo‘sh qoldiring
+```
+
+Keyin `./scripts/server-up.sh` va odamlarni taklif qilish:
+
+```bash
+docker compose run --rm migrate npm run invite -- aziza@example.uz bobur@example.uz
+docker compose run --rm migrate npm run invite -- --list
+docker compose run --rm migrate npm run invite -- --revoke bobur@example.uz
+```
+
+Himoya: javob email ro‘yxatda bor-yo‘qligidan qat’i nazar bir xil; token bazada faqat SHA-256 sifatida saqlanadi; havola bir marta ishlaydi va boshqa ochiq havolalarni bekor qiladi; email bo‘yicha soatiga 5 ta, IP bo‘yicha 10 daqiqada 20 ta urinish; sign-in POST faqat `APP_ORIGIN`dan qabul qilinadi; HTTPS’da cookie `Secure`. Havola tasdig‘i GET emas, frontend yuboradigan POST — pochta skanerlari havolani oldindan ochib tokenni ishlatib yubora olmaydi. Development’da `RESEND_API_KEY` bo‘lmasa havola API logiga chiqariladi.
 
 ### Lokal frontend development
 
@@ -97,7 +119,7 @@ VITE_API_MODE=server VITE_DEV_USER_ID=00000000-0000-4000-8000-000000000004 npx v
 NIYAT_E2E_APP=http://127.0.0.1:4174 npm run test:e2e
 ```
 
-Production’da `AUTH_MODE=local` qat’iy rad etiladi; OAuth/passkey/magic-link provider session yaratish oqimiga ulanishi shart. API va browser dev serverlari birga ishlaganda Vite `/v1` so‘rovlarini `127.0.0.1:3000` ga proxy qiladi. Docker stack’da Nginx shu proxy vazifasini bajaradi.
+Production’da `AUTH_MODE=local` qat’iy rad etiladi; faqat `AUTH_MODE=email` (https `APP_ORIGIN` va Resend bilan) ishga tushadi. API va browser dev serverlari birga ishlaganda Vite `/v1` so‘rovlarini `127.0.0.1:3000` ga proxy qiladi. Docker stack’da Nginx shu proxy vazifasini bajaradi.
 
 ## Secretlar
 
@@ -144,4 +166,4 @@ Bu hali production ijtimoiy tarmoq emas. Backend qurishdan oldin 30–50 foydala
 
 Default UI local-first demo bo‘lib qoladi. `VITE_API_MODE=server` rejimida butun workspace serverdan ishlaydi va brauzer storage’iga server ma’lumoti yozilmaydi; requester o‘z natijasini tasdiqlay olmaydi, qarorni faqat hamkor o‘z sessiyasidan beradi. Local demo’dagi counterparty tugmasi faqat prototip simulyatsiyasidir. Circles hozircha faqat demo’da.
 
-Keyingi bosqich: production auth provider, matching uchun background worker, notification va moderator vositalari, analytics va deployment observability. DID/blockchain MVP uchun ataylab qo‘shilmadi.
+Keyingi bosqich: matching uchun background worker, notification va moderator vositalari, analytics va deployment observability. DID/blockchain MVP uchun ataylab qo‘shilmadi.

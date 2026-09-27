@@ -4,6 +4,9 @@ export type Session = {
   expiresAt: string
 }
 
+/** A freshly issued session plus the Set-Cookie header value that carries its opaque token. */
+export type CreatedSession = { session: Session; cookie: string }
+
 export interface SessionResolver {
   resolve(request: Request): Promise<Session | null>
 }

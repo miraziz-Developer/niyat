@@ -4,6 +4,7 @@ const contract = JSON.parse(readFileSync(new URL('../contracts/openapi.v1.json',
 const migration = readFileSync(new URL('../db/migrations/0001_gate2_foundation.up.sql', import.meta.url), 'utf8')
 const introAuthorizationMigration = readFileSync(new URL('../db/migrations/0002_intro_authorization.up.sql', import.meta.url), 'utf8')
 const outcomeMigration = readFileSync(new URL('../db/migrations/0003_collaboration_outcomes.up.sql', import.meta.url), 'utf8')
+const authMigration = readFileSync(new URL('../db/migrations/0006_invite_magic_link.up.sql', import.meta.url), 'utf8')
 const runtimeMigration = readFileSync(new URL('../db/migrations/0004_runtime_foundation.up.sql', import.meta.url), 'utf8')
 const matchingMigration = readFileSync(new URL('../db/migrations/0005_matching_safety.up.sql', import.meta.url), 'utf8')
 
@@ -24,7 +25,8 @@ for (const [path, item] of Object.entries(contract.paths)) {
   for (const [method, operation] of Object.entries(item)) {
     if (!['get', 'post', 'patch', 'put', 'delete'].includes(method)) continue
     if (!operation.operationId) failures.push(`${method.toUpperCase()} ${path} has no operationId`)
-    const mutates = ['post', 'patch', 'put', 'delete'].includes(method) && !(path === '/session' && method === 'delete')
+    // Sign-in routes run before a session exists; single-use tokens make them naturally idempotent.
+    const mutates = ['post', 'patch', 'put', 'delete'].includes(method) && !(path === '/session' && method === 'delete') && !path.startsWith('/auth/')
     const parameters = operation.parameters ?? item.parameters ?? []
     if (mutates && !parameters.some(parameter => parameter.$ref === '#/components/parameters/IdempotencyKey')) failures.push(`${method.toUpperCase()} ${path} has no Idempotency-Key`)
   }
@@ -40,6 +42,10 @@ for (const marker of ['ENABLE ROW LEVEL SECURITY', 'collaboration_outcome_transi
 }
 for (const marker of ['ALTER TABLE matches ENABLE ROW LEVEL SECURITY', 'matches_participant_all', 'SECURITY DEFINER', 'SET search_path = pg_catalog, public, pg_temp', "visibility <> 'private'", 'public.blocks', 'REVOKE ALL ON FUNCTION matchable_intents', 'REVOKE ALL ON FUNCTION match_counterpart', "intro_requests.status = 'accepted'", 'audit_events_no_truncate']) {
   if (!matchingMigration.includes(marker)) failures.push(`Matching migration safety marker missing: ${marker}`)
+}
+
+for (const marker of ['CREATE TABLE invitations (', 'CREATE TABLE login_tokens (', 'token_hash text NOT NULL UNIQUE']) {
+  if (!authMigration.includes(marker)) failures.push(`Auth migration marker missing: ${marker}`)
 }
 
 visit(contract, value => {

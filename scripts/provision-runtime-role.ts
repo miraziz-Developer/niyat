@@ -13,8 +13,10 @@ if (!password || password.length < 24) throw new Error('NIYAT_APP_DB_PASSWORD mu
 
 // Table privileges mirror what the gateways actually do; anything absent here is denied.
 const grants: Record<string, string[]> = {
-  users: ['SELECT'],
-  auth_identities: ['SELECT'],
+  users: ['SELECT', 'INSERT'],
+  auth_identities: ['SELECT', 'INSERT', 'UPDATE'],
+  invitations: ['SELECT', 'UPDATE'],
+  login_tokens: ['SELECT', 'INSERT', 'UPDATE'],
   profiles: ['SELECT', 'INSERT', 'UPDATE'],
   intents: ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
   matches: ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],

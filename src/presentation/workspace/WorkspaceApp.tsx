@@ -3,6 +3,7 @@ import { completeMilestone, createCollaboration } from '../../application/collab
 import { rankMatches } from '../../application/matching/rank-matches'
 import { requestOutcomeVerification, resolveOutcomeVerification } from '../../application/outcomes/manage-outcome-verification'
 import { createIntroRequest, transitionIntroRequest } from '../../application/requests/manage-intro-request'
+import { NetworkError } from '../../application/ports/network-client'
 import type { Circle, Collaboration, Intent, IntroRequest, Match, OutcomeVerification, Person, TrustSignal } from '../../domain/model/entities'
 import type { Viewer } from '../app.types'
 import { describeError } from '../shared/describe-error'
@@ -29,13 +30,15 @@ type ProductAppProps = {
   data: WorkspaceData
   onEdit: () => void
   onExit: () => void
+  /** Server mode: called when the API reports the session is gone, so the app can return to sign-in. */
+  onSessionExpired?: () => void
 }
 
 type ServerStatus = 'local' | 'loading' | 'connected' | 'error'
 
 const defaultMilestones = ['Birinchi uchrashuvni o‘tkazish', 'Keyingi amaliy qadamni yakunlash']
 
-export default function ProductApp({ intent, server, viewer, data, onEdit, onExit }: ProductAppProps) {
+export default function ProductApp({ intent, server, viewer, data, onEdit, onExit, onSessionExpired }: ProductAppProps) {
   const network = useNetwork()
   const local = network === null
   const [section, setSection] = useState<WorkspaceSection>('today')
@@ -82,9 +85,14 @@ export default function ProductApp({ intent, server, viewer, data, onEdit, onExi
     setServerStatus('connected')
   }, [network, actorId, serverIntentId, intent.title, setCollaborations, setRequests, setTrustSignals, setVerifications])
 
+  const failed = useCallback((error: unknown) => {
+    if (error instanceof NetworkError && error.status === 401 && onSessionExpired) { onSessionExpired(); return true }
+    return false
+  }, [onSessionExpired])
+
   useEffect(() => {
-    refresh().catch(() => setServerStatus('error'))
-  }, [refresh])
+    refresh().catch(error => { if (!failed(error)) setServerStatus('error') })
+  }, [refresh, failed])
 
   /** Runs a server mutation, then re-reads the server's view so the UI never guesses state. */
   async function onServer(action: () => Promise<unknown>, success: string) {
@@ -95,7 +103,7 @@ export default function ProductApp({ intent, server, viewer, data, onEdit, onExi
       showNotice(success)
       return true
     } catch (error) {
-      showNotice(describeError(error), 'error')
+      if (!failed(error)) showNotice(describeError(error), 'error')
       return false
     } finally {
       setBusy(false)

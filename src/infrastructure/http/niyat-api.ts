@@ -30,6 +30,14 @@ export class NiyatApi implements NetworkClient {
     return { userId: this.session.userId, profile }
   }
 
+  async requestMagicLink(email: string) {
+    await this.request('/auth/magic-link', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email }) })
+  }
+
+  async verifyMagicLink(token: string) {
+    this.session = await this.request<Session>('/auth/magic-link/verify', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token }) })
+  }
+
   saveProfile(input: ProfileInput) { return this.mutate<ServerProfile>('/me/profile', 'PATCH', input) }
   listIntents() { return this.all<ServerIntent>('/intents') }
   createIntent(input: IntentInput) { return this.mutate<ServerIntent>('/intents', 'POST', input) }

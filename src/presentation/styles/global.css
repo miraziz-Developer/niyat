@@ -144,7 +144,7 @@ p { margin: 0; }
 .orbit { position: absolute; border: 1px solid #283126; border-radius: 50%; inset: 8%; }
 .orbit-b { inset: 25%; border-style: dashed; animation: spin 50s linear infinite; }
 .node { position: absolute; width: 74px; height: 74px; border: 1px solid #384036; background: #111510; border-radius: 50%; display: grid; place-items: center; box-shadow: 0 0 35px #bdf9590d; }
-.node span { font: 500 10px var(--font-mono); color: var(--text-3); letter-spacing: .08em; }
+.node span { font: 500 10px var(--font-mono); color: var(--text-2); letter-spacing: .08em; }
 .node-a { top: 5%; left: 48%; }
 .node-b { top: 56%; left: 2%; }
 .node-c { right: 1%; bottom: 16%; }
@@ -584,3 +584,14 @@ p { margin: 0; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
 }
+
+/* ==========================================================================
+   Sign-in
+   ========================================================================== */
+.login-panel { position: relative; z-index: 3; width: min(460px, 100%); margin-top: 34px; display: grid; gap: 16px; padding: 28px; border: 1px solid var(--line-strong); border-radius: var(--radius); background: #0e1114f2; box-shadow: var(--shadow); }
+.login-panel h2 { font-size: 28px; letter-spacing: -.03em; }
+.login-panel > p { color: var(--text-2); font-size: var(--fs-small); line-height: 1.6; }
+.login-panel > p b { color: var(--text); }
+.login-panel .login-hint { color: var(--text-3); font-size: var(--fs-meta); }
+.login-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; }
+@media (max-width: 600px) { .login-panel { padding: 20px; } }

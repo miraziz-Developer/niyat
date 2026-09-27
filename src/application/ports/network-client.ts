@@ -10,7 +10,11 @@ export type ProfileInput = Pick<ServerProfile, 'displayName' | 'bio' | 'language
 
 /** The authenticated NIYAT API as the browser sees it. Presentation depends on this port, never on fetch. */
 export interface NetworkClient {
+  /** Rejects with NetworkError 401 when there is no session and no private-alpha bootstrap. */
   connect(): Promise<{ userId: string; profile: ServerProfile | null }>
+  requestMagicLink(email: string): Promise<void>
+  /** Exchanges a single-use link token for a session cookie. */
+  verifyMagicLink(token: string): Promise<void>
   saveProfile(input: ProfileInput): Promise<ServerProfile>
   listIntents(): Promise<ServerIntent[]>
   createIntent(input: IntentInput): Promise<ServerIntent>

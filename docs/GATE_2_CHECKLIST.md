@@ -16,7 +16,7 @@ This checklist turns `PRODUCT_BLUEPRINT.md` into verifiable delivery units. `[~]
 
 ## Gate 2 — private alpha
 
-- [~] Auth/session boundary — opaque, revocable PostgreSQL session + CSRF implemented; production identity provider open
+- [x] Auth/session boundary — invite-only email magic links (hashed single-use tokens, uniform responses, per-email and per-IP limits, Origin check, Secure cookies over HTTPS) on top of opaque, revocable PostgreSQL sessions + CSRF; production refuses the local bootstrap
 - [~] PostgreSQL — `pg` runtime, migration runner, reversible migrations, constraints, RLS and persistent self-hosted Docker deployment rehearsed on PostgreSQL 17; managed deployment/backup drill open
 - [x] Versioned REST/OpenAPI API — every v1 contract path is served by the declarative router (session, profile, intents, matches, intros, collaboration/outcome, trust signals, blocks, reports)
 - [x] Profile and intent CRUD — owner-scoped reads, keyset pagination, lifecycle transitions, idempotent mutations, history-preserving delete, and browser onboarding (profile + intent in one publish) in server mode
@@ -28,7 +28,7 @@ This checklist turns `PRODUCT_BLUEPRINT.md` into verifiable delivery units. `[~]
 - [x] Least-privilege runtime role — migrate job provisions `niyat_app` (NOBYPASSRLS, per-table grants, no DDL, audit INSERT-only); the API refuses to start in production as an RLS-bypassing role
 - [~] Block/report — block closes pending intros and hides the pair from matching; reports are audited and rate-limited (20/day); moderator review tooling open
 - [ ] Notifications and delivery preferences
-- [ ] Invite-only cohort and 30–50 alpha users
+- [~] Invite-only cohort and 30–50 alpha users — invitation list and `npm run invite` tooling ready; recruiting the cohort open
 - [ ] Product analytics for publish activation and useful-match rating
 - [ ] Alpha privacy notice, terms, retention schedule and incident owner
 

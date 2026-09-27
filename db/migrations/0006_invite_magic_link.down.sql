@@ -1,0 +1,4 @@
+BEGIN;
+DROP TABLE IF EXISTS login_tokens;
+DROP TABLE IF EXISTS invitations;
+COMMIT;

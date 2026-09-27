@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
 import type { IntentInput, ServerIntent } from '../application/intents/intent'
+import { NetworkError } from '../application/ports/network-client'
 import type { ServerProfile } from '../application/profiles/profile'
 import type { Intent } from '../domain/model/entities'
 import type { AppData, IntentDraft, Viewer } from './app.types'
+import { LoginPanel } from './LoginPanel'
 import { describeError } from './shared/describe-error'
 import { useNetwork } from './shared/network-context'
 import { Segmented } from './shared/Segmented'
@@ -16,6 +18,7 @@ type ServerState =
   | { status: 'local' }
   | { status: 'loading' }
   | { status: 'error'; message: string }
+  | { status: 'signed-out'; notice?: string }
   | { status: 'ready'; userId: string; profile: ServerProfile | null; intent: ServerIntent | null }
 type Visibility = Extract<IntentInput['visibility'], 'matched' | 'public'>
 
@@ -42,6 +45,24 @@ function Mark() {
   return <div className="mark" aria-hidden="true"><i /><i /><i /></div>
 }
 
+let loginLink: Promise<boolean> | null = null
+
+/**
+ * A sign-in link lands as ?login_token=…. The token is removed from the address bar immediately, so it never
+ * stays in history, bookmarks or a Referer header, and exchanged exactly once: every caller (including React's
+ * development double-mount) awaits the same promise. Resolves false only when a token was present and refused.
+ */
+function consumeLoginLink(client: { verifyMagicLink(token: string): Promise<void> }): Promise<boolean> {
+  if (loginLink) return loginLink
+  const url = new URL(window.location.href)
+  const token = url.searchParams.get('login_token')
+  if (!token) return Promise.resolve(true)
+  url.searchParams.delete('login_token')
+  window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`)
+  loginLink = client.verifyMagicLink(token).then(() => true, () => false)
+  return loginLink
+}
+
 /** The intent the member works on: the first one they can still act on, newest first. */
 function pickIntent(intents: ServerIntent[]) {
   return intents.find(intent => intent.status === 'active') ?? intents.find(intent => editableStatuses.includes(intent.status)) ?? null
@@ -63,16 +84,27 @@ function App({ data }: { data: AppData }) {
   useEffect(() => {
     if (!network) return
     let cancelled = false
-    // The session must exist before any authenticated read, so these calls are sequential.
-    network.connect().then(async session => ({ session, intents: await network.listIntents() })).then(({ session, intents }) => {
-      if (cancelled) return
-      const intent = pickIntent(intents)
-      setDraft(intent ? { title: intent.title, outcome: intent.outcome, offers: intent.offers, needs: intent.needs, topics: intent.topics, mode: intent.mode, horizon: intent.horizon } : emptyDraft)
-      if (intent?.visibility === 'public') setVisibility('public')
-      setServer({ status: 'ready', userId: session.userId, profile: session.profile, intent })
-    }).catch((error: unknown) => {
-      if (!cancelled) setServer({ status: 'error', message: describeError(error, 'Server bilan ulanib bo‘lmadi.') })
-    })
+    async function bootstrap(client: NonNullable<typeof network>) {
+      const linkFailed = !(await consumeLoginLink(client))
+      try {
+        // The session must exist before any authenticated read, so these calls are sequential.
+        const session = await client.connect()
+        const intents = await client.listIntents()
+        if (cancelled) return
+        const intent = pickIntent(intents)
+        setDraft(intent ? { title: intent.title, outcome: intent.outcome, offers: intent.offers, needs: intent.needs, topics: intent.topics, mode: intent.mode, horizon: intent.horizon } : emptyDraft)
+        if (intent?.visibility === 'public') setVisibility('public')
+        setServer({ status: 'ready', userId: session.userId, profile: session.profile, intent })
+      } catch (error) {
+        if (cancelled) return
+        if (error instanceof NetworkError && error.status === 401) {
+          setServer({ status: 'signed-out', ...(linkFailed ? { notice: 'Kirish havolasi eskirgan yoki allaqachon ishlatilgan. Yangisini so‘rang.' } : {}) })
+        } else {
+          setServer({ status: 'error', message: describeError(error, 'Server bilan ulanib bo‘lmadi.') })
+        }
+      }
+    }
+    void bootstrap(network)
     return () => { cancelled = true }
   }, [network, setDraft])
 
@@ -122,6 +154,11 @@ function App({ data }: { data: AppData }) {
     }
   }
 
+  function signedOut() {
+    setScreen('home')
+    setServer({ status: 'signed-out' })
+  }
+
   function openWorkspace() {
     if (!network) { setDraft(starterIntent); setScreen('product'); return }
     setScreen(serverIntent?.status === 'active' ? 'product' : 'create')
@@ -135,35 +172,41 @@ function App({ data }: { data: AppData }) {
         viewer={viewer}
         data={{ people, circles, initialRequests }}
         onEdit={() => setScreen('create')}
-        onExit={() => setScreen('home')}
+        onExit={network ? signedOut : () => setScreen('home')}
+        onSessionExpired={network ? () => setServer({ status: 'signed-out', notice: 'Sessiya tugadi. Davom etish uchun qayta kiring.' }) : undefined}
       />
     )
   }
 
   const editing = serverIntent?.status === 'active'
+  const signedOutState = server.status === 'signed-out' ? server : null
+  // Without a session only the landing page is meaningful; the capsule needs an account to save to.
+  const visibleScreen = signedOutState ? 'home' : screen
 
   return (
     <main>
       <nav className="top-nav" aria-label="Asosiy">
         <button className="brand" onClick={() => setScreen('home')} aria-label="Niyat — bosh sahifa"><Mark /><b>niyat</b><em>beta</em></button>
         <div className="nav-center"><span className="live-dot" aria-hidden="true" /> {network ? 'Private alpha' : 'Local demo · ma’lumot shu brauzerda'}</div>
-        <button aria-label="Niyatni tahrirlash" className="avatar" onClick={() => setScreen('create')}>{viewer.name[0]?.toUpperCase()}</button>
+        {signedOutState ? <span aria-hidden="true" /> : <button aria-label="Niyatni tahrirlash" className="avatar" onClick={() => setScreen('create')}>{viewer.name[0]?.toUpperCase()}</button>}
       </nav>
 
       {server.status === 'loading' && <div className="api-status" role="status">Server ma’lumotlari yuklanmoqda…</div>}
       {server.status === 'error' && <div className="api-status error" role="alert">{server.message} <button onClick={() => window.location.reload()}>Qayta urinish</button></div>}
 
-      {screen === 'home' && (
+      {visibleScreen === 'home' && (
         <section className="home">
           <div className="eyebrow"><span aria-hidden="true">✦</span> Profil emas — niyat</div>
           <h1>Kerakli insonni emas.<br /><strong>Kerakli <i>to‘qnashuvni</i> top.</strong></h1>
           <p className="lead">Niyatingni ayt. Biz sen bera oladigan va olishing kerak bo‘lgan narsalar kesishgan insonlarni topamiz.</p>
-          <div className="hero-actions">
-            <button className="primary" onClick={() => setScreen('create')}>{editing ? 'Niyatni tahrirlash' : 'Niyat yaratish'} <span aria-hidden="true">↗</span></button>
-            <button className="text-button" disabled={server.status === 'loading'} onClick={openWorkspace}>
-              {network ? 'Workspace’ni ochish' : 'Jonli demoni ko‘rish'} <span aria-hidden="true">→</span>
-            </button>
-          </div>
+          {signedOutState && network ? <LoginPanel network={network} notice={signedOutState.notice} /> : (
+            <div className="hero-actions">
+              <button className="primary" onClick={() => setScreen('create')}>{editing ? 'Niyatni tahrirlash' : 'Niyat yaratish'} <span aria-hidden="true">↗</span></button>
+              <button className="text-button" disabled={server.status === 'loading'} onClick={openWorkspace}>
+                {network ? 'Workspace’ni ochish' : 'Jonli demoni ko‘rish'} <span aria-hidden="true">→</span>
+              </button>
+            </div>
+          )}
           <div className="constellation" aria-hidden="true">
             <div className="orbit orbit-a" /><div className="orbit orbit-b" />
             <div className="node node-a"><span>G‘OYA</span></div>
@@ -179,7 +222,7 @@ function App({ data }: { data: AppData }) {
         </section>
       )}
 
-      {screen === 'create' && (
+      {visibleScreen === 'create' && (
         <section className="workspace" aria-labelledby="capsule-title">
           <header className="section-head">
             <div><span className="kicker">Niyat kapsulasi</span><h2 id="capsule-title">{editing ? 'Niyatingni yangila.' : 'Niyatingni aniq qil.'}</h2><p>Algoritm unvonlarni emas, o‘zaro qiymatni qidiradi.</p></div>
