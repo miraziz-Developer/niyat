@@ -4,7 +4,7 @@
 #   Sinov (domensiz, http://SERVER_IP:8080, demo foydalanuvchi bilan):
 #     ./scripts/server-up.sh
 #
-#   Haqiqiy ishga tushirish (HTTPS + taklif asosidagi email kirish):
+#   Haqiqiy ishga tushirish (HTTPS + email kirish + himoya + backup + monitoring):
 #     ./scripts/server-up.sh --domain niyat.uz --email siz@gmail.com --resend-key re_xxx
 #
 #   Yangilash:  git pull && ./scripts/server-up.sh
@@ -30,6 +30,11 @@ Parametrlar (yoki shu nomdagi muhit o'zgaruvchilari):
   --resend-key KALIT      RESEND_API_KEY     Xat yuborish (resend.com). Bo'lmasa havolalar API logiga chiqadi
   --mail-from "N <a@d>"   MAIL_FROM          Xat jo'natuvchisi (default: NIYAT <kirish@DOMEN>)
   --contact EMAIL         VITE_CONTACT_EMAIL Maxfiylik sahifasidagi aloqa emaili (default: admin emaili)
+  --operator "NOM"        VITE_OPERATOR_NAME Ma'lumot uchun mas'ul shaxs/tashkilot (maxfiylik sahifasida)
+  --alert-email EMAIL     NIYAT_ALERT_EMAIL  Muammo haqida ogohlantirish emaili (default: admin emaili)
+  --backup-remote REMOTE  NIYAT_BACKUP_REMOTE Backup nusxasi uchun rclone manzili, masalan b2:niyat-backups
+  --ssh-keys-only         SSH'ga parol bilan kirishni o'chiradi (serverda kalitingiz bo'lsa)
+  --no-harden             Firewall/avto-yangilanish/fail2ban bosqichini o'tkazib yuboradi
   --env-only              Faqat .env ni yozib chiqadi, Docker'ga tegmaydi
   -h, --help              Shu yordam
 EOF
@@ -40,6 +45,11 @@ ADMIN_EMAIL=${NIYAT_ADMIN_EMAIL:-}
 RESEND_KEY=${RESEND_API_KEY:-}
 MAIL_FROM_ARG=${MAIL_FROM:-}
 CONTACT=${VITE_CONTACT_EMAIL:-}
+OPERATOR=${VITE_OPERATOR_NAME:-}
+ALERT_EMAIL=${NIYAT_ALERT_EMAIL:-}
+BACKUP_REMOTE=${NIYAT_BACKUP_REMOTE:-}
+HARDEN=${NIYAT_HARDEN:-1}
+KEYS_ONLY=0
 ENV_ONLY=0
 ARGS_GIVEN=0
 
@@ -50,6 +60,11 @@ while [ $# -gt 0 ]; do
     --resend-key) RESEND_KEY=${2:?--resend-key qiymat talab qiladi}; ARGS_GIVEN=1; shift 2 ;;
     --mail-from) MAIL_FROM_ARG=${2:?--mail-from qiymat talab qiladi}; ARGS_GIVEN=1; shift 2 ;;
     --contact) CONTACT=${2:?--contact qiymat talab qiladi}; ARGS_GIVEN=1; shift 2 ;;
+    --operator) OPERATOR=${2:?--operator qiymat talab qiladi}; ARGS_GIVEN=1; shift 2 ;;
+    --alert-email) ALERT_EMAIL=${2:?--alert-email qiymat talab qiladi}; ARGS_GIVEN=1; shift 2 ;;
+    --backup-remote) BACKUP_REMOTE=${2:?--backup-remote qiymat talab qiladi}; ARGS_GIVEN=1; shift 2 ;;
+    --ssh-keys-only) KEYS_ONLY=1; shift ;;
+    --no-harden) HARDEN=0; shift ;;
     --env-only) ENV_ONLY=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) usage; die "Noma'lum parametr: $1" ;;
@@ -102,6 +117,7 @@ DOMAIN=$(printf '%s' "$DOMAIN" | tr 'A-Z' 'a-z' | sed 's#^https\{0,1\}://##; s#[
   || die "Domen noto'g'ri: $DOMAIN (masalan: niyat.example.uz)"
 [ -z "$ADMIN_EMAIL" ] || valid_email "$ADMIN_EMAIL" || die "Admin emaili noto'g'ri: $ADMIN_EMAIL"
 [ -z "$CONTACT" ] || valid_email "$CONTACT" || die "Aloqa emaili noto'g'ri: $CONTACT"
+[ -z "$ALERT_EMAIL" ] || valid_email "$ALERT_EMAIL" || die "Ogohlantirish emaili noto'g'ri: $ALERT_EMAIL"
 
 # ---------------------------------------------------------------------------
 # .env
@@ -133,6 +149,9 @@ if [ -n "$DOMAIN" ]; then
   [ -z "$ADMIN_EMAIL" ] || set_env NIYAT_ADMIN_EMAIL "$ADMIN_EMAIL"
   [ -n "$MAIL_FROM_ARG" ] && set_env MAIL_FROM "$MAIL_FROM_ARG" || ensure_env MAIL_FROM "NIYAT <kirish@$DOMAIN>"
   if [ -n "$CONTACT" ]; then set_env VITE_CONTACT_EMAIL "$CONTACT"; elif [ -n "$ADMIN_EMAIL" ]; then ensure_env VITE_CONTACT_EMAIL "$ADMIN_EMAIL"; fi
+  [ -z "$OPERATOR" ] || set_env VITE_OPERATOR_NAME "$OPERATOR"
+  [ -z "$ALERT_EMAIL" ] || set_env NIYAT_ALERT_EMAIL "$ALERT_EMAIL"
+  [ -z "$BACKUP_REMOTE" ] || set_env NIYAT_BACKUP_REMOTE "$BACKUP_REMOTE"
   if [ -n "$RESEND_KEY" ]; then
     set_env RESEND_API_KEY "$RESEND_KEY"
     set_env NIYAT_NODE_ENV production
@@ -155,11 +174,20 @@ if [ "$ENV_ONLY" = 1 ]; then
   exit 0
 fi
 
+SUDO=""
+[ "$(id -u)" = 0 ] || SUDO="sudo"
+
+# ---------------------------------------------------------------------------
+# Server hardening (domain mode on Debian/Ubuntu): firewall, security updates, fail2ban, cron
+# ---------------------------------------------------------------------------
+if [ -n "$DOMAIN" ] && [ "$HARDEN" != 0 ] && [ "$(uname -s)" = Linux ] && command -v apt-get >/dev/null 2>&1; then
+  if [ "$KEYS_ONLY" = 1 ]; then $SUDO ./scripts/harden.sh --ssh-keys-only; else $SUDO ./scripts/harden.sh; fi \
+    || warn "Himoya bosqichi to'liq bajarilmadi — keyinroq qayta ishga tushiring: sudo ./scripts/harden.sh"
+fi
+
 # ---------------------------------------------------------------------------
 # Docker
 # ---------------------------------------------------------------------------
-SUDO=""
-[ "$(id -u)" = 0 ] || SUDO="sudo"
 
 if ! command -v docker >/dev/null 2>&1; then
   [ "$(uname -s)" = Linux ] || die "Docker topilmadi. Docker Desktop o'rnating: https://docs.docker.com/get-docker/"
@@ -212,12 +240,22 @@ if [ -n "$ADMIN_EMAIL" ] && [ "$(get_env AUTH_MODE)" = email ]; then
   compose run --rm -T migrate npm run -s invite -- "$ADMIN_EMAIL" </dev/null
 fi
 
-# Daily verified backup at 03:15, installed once for the current user.
-if [ -n "$DOMAIN" ] && command -v crontab >/dev/null 2>&1; then
-  CRON_LINE="15 3 * * * cd $ROOT && ./scripts/backup.sh >> $ROOT/.local/backups/backup.log 2>&1"
-  if ! crontab -l 2>/dev/null | grep -Fq "$ROOT && ./scripts/backup.sh"; then
+# Daily verified backup at 03:15 and a health check every 5 minutes, installed once for the
+# account that can reach Docker (root when docker needs sudo).
+if [ -n "$DOMAIN" ]; then
+  CRONTAB=crontab
+  [ "$DOCKER" = docker ] || CRONTAB="$SUDO crontab"
+  if command -v crontab >/dev/null 2>&1; then
     mkdir -p .local/backups
-    ( crontab -l 2>/dev/null; echo "$CRON_LINE" ) | crontab - && echo "Kunlik backup cron'ga qo'shildi (03:15)."
+    add_cron() {
+      if ! $CRONTAB -l 2>/dev/null | grep -Fq "$ROOT && ./scripts/$1"; then
+        ( $CRONTAB -l 2>/dev/null; echo "$2" ) | $CRONTAB - && echo "$3"
+      fi
+    }
+    add_cron backup.sh "15 3 * * * cd $ROOT && ./scripts/backup.sh >> $ROOT/.local/backups/backup.log 2>&1" "Kunlik backup cron'ga qo'shildi (03:15)."
+    add_cron healthcheck.sh "*/5 * * * * cd $ROOT && ./scripts/healthcheck.sh >> $ROOT/.local/health.log 2>&1" "Har 5 daqiqalik tekshiruv va email ogohlantirish cron'ga qo'shildi."
+  else
+    warn "cron topilmadi: backup va monitoring avtomatik ishlamaydi (sudo apt-get install -y cron, keyin qayta ishga tushiring)."
   fi
 fi
 
@@ -257,7 +295,11 @@ EOF
       docker compose run --rm migrate npm run staff -- --grant moderator ${ADMIN_EMAIL:-EMAIL}
  3. Odamlarni taklif qiling:
       docker compose run --rm migrate npm run invite -- dost@example.com
+ 4. Ogohlantirish xati kelishini tekshiring:  ./scripts/healthcheck.sh --test
 EOF
+  if [ -z "$(get_env NIYAT_BACKUP_REMOTE)" ]; then
+    echo " 5. Backup hozircha faqat shu serverda. Tashqi nusxa uchun: DEPLOY.md, 5-bo'lim (--backup-remote)."
+  fi
 else
   cat <<EOF
  Sinov rejimi: sahifa demo foydalanuvchi bilan avtomatik ochiladi.

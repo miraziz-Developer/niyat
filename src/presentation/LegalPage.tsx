@@ -11,6 +11,7 @@ export function legalKindFor(pathname: string): LegalKind | null {
 }
 
 const contact = import.meta.env.VITE_CONTACT_EMAIL || '[aloqa emaili]'
+const operator = import.meta.env.VITE_OPERATOR_NAME || 'NIYAT private alpha jamoasi'
 
 type Section = { title: string; body: Array<string | string[]> }
 
@@ -30,7 +31,7 @@ const retention: string[][] = [
 ]
 
 const privacy: Section[] = [
-  { title: 'Kim ma’lumotni boshqaradi', body: [`NIYAT private alpha operatori. Savollar, eksport yoki o‘chirish so‘rovlari uchun: ${contact}.`] },
+  { title: 'Kim ma’lumotni boshqaradi', body: [`${operator}. Savollar, eksport yoki o‘chirish so‘rovlari uchun: ${contact}.`] },
   { title: 'Qanday ma’lumot yig‘amiz', body: [[
     'Email manzilingiz — faqat kirish havolasi va siz yoqqan bildirishnomalar uchun.',
     'Ismingiz va qisqa bio — match’larda yashirin, faqat intro qabul qilingach ikki tomonga ochiladi.',
@@ -51,7 +52,7 @@ const privacy: Section[] = [
   ] },
   { title: 'Saqlash muddatlari', body: [] },
   { title: 'Huquqlaringiz', body: [`Ma’lumotlaringiz nusxasini olish, tuzatish yoki akkauntni o‘chirishni ${contact} orqali so‘rashingiz mumkin; 30 kun ichida javob beramiz. Bildirishnomalarni Trust markazida o‘chirib qo‘yishingiz mumkin.`] },
-  { title: 'Xavfsizlik hodisasi', body: [`Ma’lumot sizib chiqishi aniqlansa, mas’ul shaxs ([mas’ul shaxs ismi]) 72 soat ichida ta’sirlangan a’zolarga xabar beradi. Zaiflik topsangiz: ${contact}.`] },
+  { title: 'Xavfsizlik hodisasi', body: [`Ma’lumot sizib chiqishi aniqlansa, mas’ul (${operator}) 72 soat ichida ta’sirlangan a’zolarga xabar beradi. Zaiflik topsangiz: ${contact}.`] },
 ]
 
 const terms: Section[] = [

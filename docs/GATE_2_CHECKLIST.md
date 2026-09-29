@@ -26,12 +26,13 @@ This checklist turns `PRODUCT_BLUEPRINT.md` into verifiable delivery units. `[~]
 - [x] Single-host private-alpha Docker stack — Nginx frontend, Node API, PostgreSQL, migration/seed jobs and one-command bootstrap
 - [x] Atomic idempotency — replay record commits in the same transaction as the business change
 - [x] Operations — hourly maintenance, `/v1/ready` readiness probe used by Docker, structured request logs, request-id error logging
+- [x] One-command server launch — `scripts/server-up.sh` (Docker install, HTTPS via Caddy, hardening, daily verified backups with optional off-site rclone copy, 5-minute health checks with email alerts); rehearsed in Docker end to end, see `DEPLOY.md`
 - [x] Least-privilege runtime role — migrate job provisions `niyat_app` (NOBYPASSRLS, per-table grants, no DDL, audit INSERT-only); the API refuses to start in production as an RLS-bypassing role
 - [x] Block/report/moderation — block closes pending intros and hides the pair; reports are audited and rate-limited; moderators work a queue with private notes and can suspend (sessions revoked, member leaves matching)
 - [x] Notifications and delivery preferences — transactional outbox, leased background delivery with retries, per-member preferences, messages without names
 - [~] Invite-only cohort and 30–50 alpha users — invitation list and `npm run invite` tooling ready; recruiting the cohort open
 - [x] Product analytics for publish activation and useful-match rating — in-transaction events, match usefulness rating, `npm run metrics` against the exit targets
-- [~] Alpha privacy notice, terms, retention schedule and incident owner — drafts with the implemented retention table and versioned 18+/terms consent are live; legal review, contact email (`VITE_CONTACT_EMAIL`) and the named incident owner remain
+- [~] Alpha privacy notice, terms, retention schedule and incident owner — drafts with the implemented retention table and versioned 18+/terms consent are live; contact email and operator are configurable (`VITE_CONTACT_EMAIL`, `VITE_OPERATOR_NAME`) and an incident runbook is in `DEPLOY.md`; legal review remains
 
 ## Authorization and safety invariants
 

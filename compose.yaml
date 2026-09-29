@@ -85,6 +85,7 @@ services:
         # No colon: an explicitly empty value (email sign-in) must stay empty instead of falling back to the demo user.
         VITE_DEV_USER_ID: ${VITE_DEV_USER_ID-00000000-0000-4000-8000-000000000001}
         VITE_CONTACT_EMAIL: ${VITE_CONTACT_EMAIL:-}
+        VITE_OPERATOR_NAME: ${VITE_OPERATOR_NAME:-}
     restart: unless-stopped
     ports:
       # With a domain (profile "https") this is bound to 127.0.0.1 and only Caddy is public.

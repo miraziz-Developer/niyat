@@ -19,10 +19,18 @@ To‘liq qo‘llanma, `.env` o‘zgaruvchilari jadvali, backup, yangilash va mua
 ```bash
 git clone https://github.com/miraziz-Developer/niyat.git /srv/niyat
 cd /srv/niyat
-./scripts/server-up.sh --domain niyat.uz --email siz@gmail.com --resend-key re_xxx
+./scripts/server-up.sh --domain niyat.uz --email siz@gmail.com --resend-key re_xxx --operator "Ism Familiya"
 ```
 
-Script kerak bo‘lsa Docker’ni o‘rnatadi, `.env` ni kuchli tasodifiy parollar bilan yaratadi, image’larni build qiladi, migratsiyalarni bajaradi, API, Nginx frontend va Caddy (avtomatik Let’s Encrypt HTTPS) ni ishga tushiradi, adminni taklif qiladi, kunlik backup cron’ini qo‘shadi va `/v1/ready` ni tekshiradi. Yangilash: `git pull && ./scripts/server-up.sh`.
+Script quyidagilarni bajaradi:
+- serverni himoyalaydi (ufw, avtomatik xavfsizlik yangilanishlari, fail2ban);
+- kerak bo‘lsa Docker’ni o‘rnatadi;
+- `.env` ni kuchli tasodifiy parollar bilan yaratadi;
+- image’larni build qiladi va migratsiyalarni bajaradi;
+- API, Nginx frontend va Caddy (avtomatik Let’s Encrypt HTTPS) ni ishga tushiradi;
+- adminni taklif qiladi;
+- cron’ga ikki ish qo‘shadi: kunlik backup (`--backup-remote` bilan server tashqarisiga nusxa) va har 5 daqiqada email ogohlantirishli monitoring (`scripts/healthcheck.sh`);
+- oxirida `/v1/ready` ni tekshiradi. Yangilash: `git pull && ./scripts/server-up.sh`.
 
 Parametrsiz `./scripts/server-up.sh` sinov rejimini ishga tushiradi: `http://SERVER_IP:8080`, demo foydalanuvchi bilan.
 

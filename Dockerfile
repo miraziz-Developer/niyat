@@ -1,5 +1,3 @@
-# syntax=docker/dockerfile:1
-
 FROM node:24-alpine AS source
 WORKDIR /app
 COPY package.json package-lock.json ./
@@ -10,9 +8,11 @@ FROM source AS frontend-build
 ARG VITE_API_MODE=server
 ARG VITE_DEV_USER_ID
 ARG VITE_CONTACT_EMAIL
+ARG VITE_OPERATOR_NAME
 ENV VITE_API_MODE=$VITE_API_MODE
 ENV VITE_DEV_USER_ID=$VITE_DEV_USER_ID
 ENV VITE_CONTACT_EMAIL=$VITE_CONTACT_EMAIL
+ENV VITE_OPERATOR_NAME=$VITE_OPERATOR_NAME
 RUN npm run build
 
 FROM nginx:1.29-alpine AS web
